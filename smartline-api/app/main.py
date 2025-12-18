@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
-from app.database import test_connection, get_connection
+from app.database import get_connection
 
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
 
