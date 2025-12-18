@@ -12,3 +12,10 @@ def get_connection():
         cursor_factory=RealDictCursor
     )
 
+def test_connection():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT 1;")
+    cur.close()
+    conn.close()
+
