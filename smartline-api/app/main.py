@@ -34,3 +34,18 @@ def health_db():
     conn = get_connection()
     conn.close()
     return {"db": "ok"}
+
+@app.get("/db/verify")
+def db_verify():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        ORDER BY table_name;
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
