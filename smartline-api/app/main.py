@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
-from app.database import test_connection
+from app.database import test_connection, get_connection
 
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
 
@@ -27,5 +27,10 @@ def backtest(strategy: StrategyRequest):
 
 @app.get("/health")
 def health():
-    test_connection()
     return {"status": "ok"}
+
+@app.get("/health/db")
+def health_db():
+    conn = get_connection()
+    conn.close()
+    return {"db": "ok"}
