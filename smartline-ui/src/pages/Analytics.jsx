@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  LineChart,
   Line,
   BarChart,
   Bar,
@@ -392,7 +393,25 @@ function Analytics() {
         </tbody>
         </table>
 
+        <h3>Scoring Trend by Week</h3>
 
+        <div style={{ width: "100%", height: 300 }}>
+        <ResponsiveContainer>
+            <LineChart data={comparison}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="week" />
+            <YAxis />
+            <Tooltip />
+            <Line
+                type="monotone"
+                dataKey="avgPoints"
+                name="Avg Total Points"
+                stroke="#2563eb"
+                strokeWidth={2}
+            />
+            </LineChart>
+        </ResponsiveContainer>
+        </div>
 
     </section>
   );
