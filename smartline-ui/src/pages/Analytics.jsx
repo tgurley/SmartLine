@@ -66,6 +66,13 @@ function Analytics() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState([]);
+  const teams = [...new Set(teamStats.map(t => t.team))].sort();
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const displayedTeams = selectedTeam
+    ? teamStats.filter(t => t.team === selectedTeam)
+    : teamStats;
+
+
 
   const totals = games
     .filter(g => g.result)
@@ -475,6 +482,22 @@ function Analytics() {
 
         <h3>Team Performance (Outdoor Games)</h3>
 
+        <label>
+        Team:&nbsp;
+        <select
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+        >
+            <option value="">All Teams</option>
+            {teams.map(t => (
+            <option key={t} value={t}>
+                {t}
+            </option>
+            ))}
+        </select>
+        </label>
+
+
         <table>
         <thead>
             <tr>
@@ -486,7 +509,7 @@ function Analytics() {
             </tr>
         </thead>
         <tbody>
-            {teamStats
+            {displayedTeams
             .sort((a, b) => b.avgFor - a.avgFor)
             .map(t => (
                 <tr key={t.team}>
@@ -504,7 +527,7 @@ function Analytics() {
 
         <div style={{ width: "100%", height: 400 }}>
         <ResponsiveContainer>
-            <BarChart data={teamStats}>
+            <BarChart data={displayedTeams}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="team" />
             <YAxis />
