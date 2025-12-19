@@ -66,13 +66,7 @@ function Analytics() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState([]);
-  const teams = [...new Set(teamStats.map(t => t.team))].sort();
   const [selectedTeam, setSelectedTeam] = useState("");
-  const displayedTeams = selectedTeam
-    ? teamStats.filter(t => t.team === selectedTeam)
-    : teamStats;
-
-
 
   const totals = games
     .filter(g => g.result)
@@ -216,6 +210,11 @@ function Analytics() {
     avgAgainst: t.pointsAgainst / t.games,
     avgSeverity: t.totalSeverity / t.games
     }));
+
+    const teams = [...new Set(teamStats.map(t => t.team))].sort();
+    const displayedTeams = selectedTeam
+        ? teamStats.filter(t => t.team === selectedTeam)
+        : teamStats;
 
 
 
