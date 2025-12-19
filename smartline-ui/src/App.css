@@ -118,3 +118,25 @@ th {
   font-weight: 600;
   margin-bottom: 1.5rem;
 }
+
+.weather-explanation {
+  margin-top: 0.75rem;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.severity-scale {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.5rem 0;
+}
+
+.severity-scale li {
+  margin-bottom: 0.25rem;
+}
+
+.why-it-matters {
+  font-style: italic;
+  margin-top: 0.5rem;
+}
