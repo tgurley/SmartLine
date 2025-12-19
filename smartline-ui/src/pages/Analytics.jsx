@@ -8,7 +8,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Line
 } from "recharts";
 
 
@@ -34,6 +35,44 @@ function Analytics() {
 
   const domeGames = totals.filter(g => g.isDome);
   const outdoorGames = totals.filter(g => !g.isDome);
+
+  function linearRegression(points) {
+    if (points.length < 2) return null;
+
+    const n = points.length;
+
+    const sumX = points.reduce((s, p) => s + p.severity, 0);
+    const sumY = points.reduce((s, p) => s + p.totalPoints, 0);
+    const sumXY = points.reduce((s, p) => s + p.severity * p.totalPoints, 0);
+    const sumXX = points.reduce((s, p) => s + p.severity * p.severity, 0);
+
+    const slope =
+        (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    return { slope, intercept };
+    }
+  
+  const regression = linearRegression(outdoorGames);
+  const trendlineData = regression
+    ? [
+        {
+            severity: Math.min(...outdoorGames.map(g => g.severity)),
+            totalPoints:
+            regression.slope *
+                Math.min(...outdoorGames.map(g => g.severity)) +
+            regression.intercept
+        },
+        {
+            severity: Math.max(...outdoorGames.map(g => g.severity)),
+            totalPoints:
+            regression.slope *
+                Math.max(...outdoorGames.map(g => g.severity)) +
+            regression.intercept
+        }
+        ]
+    : [];
+
 
 
   useEffect(() => {
@@ -146,9 +185,31 @@ function Analytics() {
                 data={domeGames}
                 fill="#16a34a"   // green
             />
+
+            {trendlineData.length > 0 && (
+            <Line
+                type="linear"
+                dataKey="totalPoints"
+                data={trendlineData}
+                stroke="#dc2626"   // red
+                strokeWidth={2}
+                dot={false}
+                name="Outdoor Trend"
+            />
+            )}
+
             </ScatterChart>
         </ResponsiveContainer>
         </div>
+        
+        {regression && (
+        <p style={{ color: "#444", marginTop: "0.5rem" }}>
+            Outdoor trend: total points ≈{" "}
+            {regression.slope.toFixed(2)} × severity +{" "}
+            {regression.intercept.toFixed(1)}
+        </p>
+        )}
+
 
     </section>
   );
