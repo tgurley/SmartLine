@@ -49,3 +49,119 @@ def db_verify():
     cur.close()
     conn.close()
     return rows
+
+@app.get("/games")
+def get_games(
+    season: int = Query(...),
+    week: int = Query(...)
+):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            g.game_id,
+            g.game_datetime_utc AS kickoff_utc,
+            g.status,
+
+            ht.team_id AS home_team_id,
+            ht.name AS home_team_name,
+            ht.abbrev AS home_team_abbrev,
+
+            at.team_id AS away_team_id,
+            at.name AS away_team_name,
+            at.abbrev AS away_team_abbrev,
+
+            v.name AS venue_name,
+            v.city AS venue_city,
+            v.state AS venue_state,
+            v.is_dome,
+
+            r.home_score,
+            r.away_score,
+            r.home_win,
+
+            w.temp_f,
+            w.wind_mph,
+            w.precip_prob,
+            w.weather_severity_score,
+            w.is_cold,
+            w.is_windy,
+            w.is_heavy_wind,
+            w.is_rain_risk,
+            w.is_storm_risk,
+            w.source AS weather_source
+
+        FROM game g
+        JOIN season s ON g.season_id = s.season_id
+        JOIN team ht ON g.home_team_id = ht.team_id
+        JOIN team at ON g.away_team_id = at.team_id
+        LEFT JOIN venue v ON g.venue_id = v.venue_id
+        LEFT JOIN game_result r ON r.game_id = g.game_id
+        LEFT JOIN weather_observation w ON w.game_id = g.game_id
+
+        WHERE s.year = %s
+          AND g.week = %s
+
+        ORDER BY g.game_datetime_utc;
+    """, (season, week))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    games = []
+
+    for r in rows:
+        games.append({
+            "game_id": r["game_id"],
+            "kickoff_utc": r["kickoff_utc"],
+            "status": r["status"],
+
+            "home_team": {
+                "team_id": r["home_team_id"],
+                "name": r["home_team_name"],
+                "abbrev": r["home_team_abbrev"],
+            },
+            "away_team": {
+                "team_id": r["away_team_id"],
+                "name": r["away_team_name"],
+                "abbrev": r["away_team_abbrev"],
+            },
+
+            "venue": {
+                "name": r["venue_name"],
+                "city": r["venue_city"],
+                "state": r["venue_state"],
+                "is_dome": r["is_dome"],
+            },
+
+            "result": (
+                {
+                    "home_score": r["home_score"],
+                    "away_score": r["away_score"],
+                    "winner": "home" if r["home_win"] else "away"
+                } if r["home_score"] is not None else None
+            ),
+
+            "weather": {
+                "source": r["weather_source"] or "dome",
+                "temp_f": r["temp_f"],
+                "wind_mph": r["wind_mph"],
+                "precip_prob": r["precip_prob"],
+                "severity_score": r["weather_severity_score"] or 0,
+                "flags": {
+                    "cold": r["is_cold"] or False,
+                    "windy": r["is_windy"] or False,
+                    "heavy_wind": r["is_heavy_wind"] or False,
+                    "rain_risk": r["is_rain_risk"] or False,
+                    "storm_risk": r["is_storm_risk"] or False,
+                }
+            }
+        })
+
+    return {
+        "season": season,
+        "week": week,
+        "games": games
+    }
