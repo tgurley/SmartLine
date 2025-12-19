@@ -64,6 +64,7 @@ function Analytics() {
 
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [comparison, setComparison] = useState([]);
 
   const totals = games
     .filter(g => g.result)
@@ -161,6 +162,50 @@ function Analytics() {
 
     load();
   }, [season, week]);
+
+  useEffect(() => {
+    async function loadComparison() {
+        const weeks = Array.from({ length: week }, (_, i) => i + 1);
+
+        const responses = await Promise.all(
+        weeks.map(w => fetchGames(season, w))
+        );
+
+        const weeklyStats = responses.map((res, i) => {
+        const games = res.games.filter(g => g.result);
+
+        const totals = games.map(
+            g => g.result.home_score + g.result.away_score
+        );
+
+        const avgPoints =
+            totals.length > 0
+            ? totals.reduce((a, b) => a + b, 0) / totals.length
+            : null;
+
+        const outdoorGames = games.filter(g => !g.venue?.is_dome);
+        const avgSeverity =
+            outdoorGames.length > 0
+            ? outdoorGames.reduce(
+                (s, g) => s + g.weather.severity_score,
+                0
+                ) / outdoorGames.length
+            : null;
+
+        return {
+            week: i + 1,
+            avgPoints,
+            avgSeverity,
+            games: games.length
+        };
+        });
+
+        setComparison(weeklyStats);
+    }
+
+    loadComparison();
+    }, [season, week]);
+
 
   if (loading) return <p>Loading analytics...</p>;
 
@@ -318,6 +363,35 @@ function Analytics() {
             </BarChart>
         </ResponsiveContainer>
         </div>
+
+        <h3>Week-to-Week Comparison</h3>
+
+        <table>
+        <thead>
+            <tr>
+            <th>Week</th>
+            <th>Avg Total Points</th>
+            <th>Avg Weather Severity (Outdoor)</th>
+            <th>Games</th>
+            </tr>
+        </thead>
+        <tbody>
+            {comparison.map(w => (
+            <tr
+                key={w.week}
+                style={{
+                fontWeight: w.week === week ? "bold" : "normal"
+                }}
+            >
+                <td>Week {w.week}</td>
+                <td>{w.avgPoints?.toFixed(1) ?? "N/A"}</td>
+                <td>{w.avgSeverity?.toFixed(2) ?? "N/A"}</td>
+                <td>{w.games}</td>
+            </tr>
+            ))}
+        </tbody>
+        </table>
+
 
 
     </section>
