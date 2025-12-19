@@ -5,6 +5,7 @@ export async function fetchGames(season, week) {
   const url = `${API_BASE_URL}/games?${params.toString()}`;
 
   const res = await fetch(url);
+  console.log("API BASE:", API_BASE_URL);
 
   if (!res.ok) {
     const text = await res.text();
