@@ -7,16 +7,12 @@ from app.database import get_connection
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # local dev
-        "http://127.0.0.1:5173",
-        "https://smart-line-three.vercel.app",
-        "https://smart-line-68ds3r4m8-tgurley1s-projects.vercel.app"
-    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.post("/backtest")
 def backtest(strategy: StrategyRequest):
