@@ -272,10 +272,6 @@ function Analytics() {
             ? totals.reduce((a, b) => a + b, 0) / totals.length
             : null;
 
-        const outliers = totals.filter(
-            g => g.totalPoints > avgPoints + 15
-        );
-
 
         const outdoorGames = games.filter(g => !g.venue?.is_dome);
         const avgSeverity =
@@ -311,6 +307,10 @@ function Analytics() {
   const handleWeekChange = (newWeek) => {
     setSearchParams({ season, week: newWeek });
   };
+
+  const outliers = totals.filter(
+            g => g.totalPoints > avgPoints + 15
+        );
 
 
 
