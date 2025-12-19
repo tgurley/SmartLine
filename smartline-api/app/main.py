@@ -1,9 +1,21 @@
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
 
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",   # local dev
+        "http://127.0.0.1:5173",
+        # later you can add your Vercel URL here
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/backtest")
 def backtest(strategy: StrategyRequest):
