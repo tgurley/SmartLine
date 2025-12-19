@@ -15,6 +15,45 @@ import {
   Legend
 } from "recharts";
 
+function WeatherTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+
+  const g = payload[0].payload;
+
+  return (
+    <div
+      style={{
+        background: "white",
+        border: "1px solid #ccc",
+        padding: "0.75rem",
+        fontSize: "0.85rem"
+      }}
+    >
+      <strong>{g.label}</strong>
+
+      <div>🏈 Total Points: {g.totalPoints}</div>
+      <div>⚠ Severity: {g.severity}</div>
+
+      {g.isDome ? (
+        <div>🏟 Dome game</div>
+      ) : (
+        <>
+          <div>🌡 Temp: {g.tempF ?? "N/A"} °F</div>
+          <div>💨 Wind: {g.windMph ?? "N/A"} mph</div>
+          <div>
+            🌧 Rain:{" "}
+            {g.rainMm == null
+              ? "N/A"
+              : g.rainMm === 0
+              ? "None"
+              : `${g.rainMm} mm`}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,8 +72,12 @@ function Analytics() {
         totalPoints: g.result.home_score + g.result.away_score,
         severity: g.weather.severity_score,
         isDome: g.venue?.is_dome,
+        tempF: g.weather.temp_f,
+        windMph: g.weather.wind_mph,
+        rainMm: g.weather.precip_mm,
         label: `${g.away_team.abbrev} @ ${g.home_team.abbrev}`
     }));
+
 
   const domeGames = totals.filter(g => g.isDome);
   const outdoorGames = totals.filter(g => !g.isDome);
@@ -126,6 +169,8 @@ function Analytics() {
     setSearchParams({ season, week: newWeek });
   };
 
+
+
   return (
     <section>
       <Link to={`/games?season=${season}&week=${week}`}>← Back to Games</Link>
@@ -194,17 +239,8 @@ function Analytics() {
                 name="Total Points"
                 label={{ value: "Total Points", angle: -90, position: "left" }}
             />
-            <Tooltip
-                cursor={{ strokeDasharray: "3 3" }}
-                formatter={(value, name, props) => {
-                if (name === "totalPoints") return [`${value}`, "Total Points"];
-                if (name === "severity") return [`${value}`, "Severity"];
-                return value;
-                }}
-                labelFormatter={(_, payload) =>
-                payload?.[0]?.payload?.label ?? ""
-                }
-            />
+            <Tooltip content={<WeatherTooltip />} />
+
             {/* Outdoor Games */}
             <Scatter
                 name="Outdoor"
