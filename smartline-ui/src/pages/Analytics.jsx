@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { fetchGames } from "../api/games";
 
 function Analytics() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
 
   const season = Number(searchParams.get("season")) || 2023;
   const week = Number(searchParams.get("week")) || 1;
