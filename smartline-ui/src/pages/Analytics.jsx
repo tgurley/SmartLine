@@ -324,6 +324,34 @@ function Analytics() {
     setSearchParams({ season, week: newWeek });
   };
 
+    // --------------------
+    // Current-week summary
+    // --------------------
+    const avgPoints =
+    totals.length > 0
+        ? totals.reduce((s, g) => s + g.totalPoints, 0) / totals.length
+        : null;
+
+    const avgSeverity =
+    outdoorGames.length > 0
+        ? outdoorGames.reduce((s, g) => s + g.severity, 0) / outdoorGames.length
+        : null;
+
+    const worstGame =
+    outdoorGames.length > 0
+        ? outdoorGames.reduce((a, b) =>
+            b.severity > a.severity ||
+            (b.severity === a.severity && b.totalPoints > a.totalPoints)
+            ? b
+            : a
+        )
+        : null;
+
+    const worstGameLabel = worstGame
+    ? `${worstGame.label} (Severity ${worstGame.severity})`
+    : "N/A";
+
+
   const outliers = totals.filter(
             g => g.totalPoints > avgPoints + 15
         );
