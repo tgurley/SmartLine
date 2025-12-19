@@ -34,6 +34,11 @@ function Analytics() {
 
   if (loading) return <p>Loading analytics...</p>;
 
+  // Update URL when week changes
+  const handleWeekChange = (newWeek) => {
+    setSearchParams({ season, week: newWeek });
+  };
+
   return (
     <section>
       <Link to={`/games?season=${season}&week=${week}`}>← Back to Games</Link>
@@ -44,21 +49,20 @@ function Analytics() {
         Visual breakdown of scoring and weather impact for the selected week.
       </p>
 
+      {/* Week Selector */}
       <label>
         Week:&nbsp;
         <select
-            value={week}
-            onChange={(e) =>
-            setSearchParams({ season, week: Number(e.target.value) })
-            }
+          value={week}
+          onChange={(e) => handleWeekChange(Number(e.target.value))}
         >
-            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+          {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
             <option key={w} value={w}>
-                {w}
+              {w}
             </option>
-            ))}
+          ))}
         </select>
-        </label>
+      </label>
 
 
       <h3>Total Points per Game</h3>
