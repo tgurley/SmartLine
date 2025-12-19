@@ -282,10 +282,26 @@ function Analytics() {
                 ) / outdoorGames.length
             : null;
 
+        const worstGame =
+            outdoorGames.length > 0
+                ? outdoorGames.reduce((a, b) =>
+                    b.severity > a.severity ||
+                    (b.severity === a.severity && b.totalPoints > a.totalPoints)
+                    ? b
+                    : a
+                )
+                : null;
+
+        const worstGameLabel = worstGame
+            ? `${worstGame.label} (Severity ${worstGame.severity})`
+            : "N/A";
+
+
         return {
             week: i + 1,
             avgPoints,
             avgSeverity,
+            worstGameLabel,
             games: games.length
         };
         });
