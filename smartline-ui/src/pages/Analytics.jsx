@@ -28,8 +28,12 @@ function Analytics() {
         gameId: g.game_id,
         totalPoints: g.result.home_score + g.result.away_score,
         severity: g.weather.severity_score,
+        isDome: g.venue?.is_dome,
         label: `${g.away_team.abbrev} @ ${g.home_team.abbrev}`
     }));
+
+  const domeGames = totals.filter(g => g.isDome);
+  const outdoorGames = totals.filter(g => !g.isDome);
 
 
   useEffect(() => {
@@ -129,10 +133,18 @@ function Analytics() {
                 payload?.[0]?.payload?.label ?? ""
                 }
             />
+            {/* Outdoor Games */}
             <Scatter
-                name="Games"
-                data={totals}
-                fill="#2563eb"
+                name="Outdoor"
+                data={outdoorGames}
+                fill="#2563eb"   // blue
+            />
+
+            {/* Dome Games */}
+            <Scatter
+                name="Dome"
+                data={domeGames}
+                fill="#16a34a"   // green
             />
             </ScatterChart>
         </ResponsiveContainer>
