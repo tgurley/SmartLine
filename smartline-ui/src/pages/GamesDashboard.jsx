@@ -43,6 +43,11 @@ function GamesDashboard() {
         Week {week} Games <span style={{ color: "#666" }}>({season})</span>
       </h2>
 
+      <Link to={`/analytics?season=${season}&week=${week}`}>
+         View Week Analytics →
+      </Link>
+
+
       {/* Week Selector */}
       <label>
         Week:&nbsp;
