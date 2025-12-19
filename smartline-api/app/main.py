@@ -177,3 +177,85 @@ def get_games(
         "week": week,
         "games": games
     }
+    
+@app.get("/games/{game_id}")
+def get_game_detail(game_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            g.game_id,
+            g.game_datetime_utc AS kickoff_utc,
+            g.status,
+
+            ht.team_id AS home_team_id,
+            ht.name AS home_team_name,
+            ht.abbrev AS home_team_abbrev,
+
+            at.team_id AS away_team_id,
+            at.name AS away_team_name,
+            at.abbrev AS away_team_abbrev,
+
+            r.home_score,
+            r.away_score,
+
+            w.temp_f,
+            w.wind_mph,
+            w.precip_prob,
+            w.weather_severity_score,
+            w.is_cold,
+            w.is_windy,
+            w.is_heavy_wind,
+            w.is_rain_risk,
+            w.is_storm_risk,
+            w.source AS weather_source
+
+        FROM game g
+        JOIN team ht ON g.home_team_id = ht.team_id
+        JOIN team at ON g.away_team_id = at.team_id
+        LEFT JOIN game_result r ON r.game_id = g.game_id
+        LEFT JOIN weather_observation w ON w.game_id = g.game_id
+        WHERE g.game_id = %s;
+    """, (game_id,))
+
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return {"error": "Game not found"}
+
+    return {
+        "game_id": row["game_id"],
+        "kickoff_utc": row["kickoff_utc"],
+        "status": row["status"],
+        "home_team": {
+            "name": row["home_team_name"],
+            "abbrev": row["home_team_abbrev"]
+        },
+        "away_team": {
+            "name": row["away_team_name"],
+            "abbrev": row["away_team_abbrev"]
+        },
+        "result": (
+            {
+                "home_score": row["home_score"],
+                "away_score": row["away_score"]
+            } if row["home_score"] is not None else None
+        ),
+        "weather": {
+            "source": row["weather_source"],
+            "temp_f": row["temp_f"],
+            "wind_mph": row["wind_mph"],
+            "precip_prob": row["precip_prob"],
+            "severity_score": row["weather_severity_score"],
+            "flags": {
+                "cold": row["is_cold"],
+                "windy": row["is_windy"],
+                "heavy_wind": row["is_heavy_wind"],
+                "rain_risk": row["is_rain_risk"],
+                "storm_risk": row["is_storm_risk"],
+            }
+        }
+    }

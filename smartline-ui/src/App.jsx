@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import GamesDashboard from "./pages/GamesDashboard";
+import GameDetail from "./pages/GameDetail";
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/games" replace />} />
         <Route path="/games" element={<GamesDashboard />} />
+        <Route path="/game/:gameId" element={<GameDetail />} />
       </Routes>
     </div>
   );

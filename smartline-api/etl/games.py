@@ -69,6 +69,16 @@ def load_games():
         game = g["game"]
         teams = g["teams"]
         status_raw = game["status"]["short"]
+        
+        status = STATUS_MAP.get(status_raw, "scheduled")
+
+        # If results exist, game is final (including OT)
+        if status == "scheduled" and teams["home_score"] is not None:
+            status = "final"
+
+        # Optional: enrich OT explicitly later
+
+        
 
         # Skip non-regular season games if needed
         if game.get("stage") != "Regular Season":
