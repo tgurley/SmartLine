@@ -272,6 +272,11 @@ function Analytics() {
             ? totals.reduce((a, b) => a + b, 0) / totals.length
             : null;
 
+        const outliers = totals.filter(
+            g => g.totalPoints > avgPoints + 15
+        );
+
+
         const outdoorGames = games.filter(g => !g.venue?.is_dome);
         const avgSeverity =
             outdoorGames.length > 0
@@ -314,6 +319,29 @@ function Analytics() {
       <Link to={`/games?season=${season}&week=${week}`}>← Back to Games</Link>
 
       <h2>Analytics — Week {week} ({season})</h2>
+
+      <h3>Week {week} Weather Impact Summary</h3>
+
+        <ul>
+        <li>
+            Average total points: <strong>{avgPoints}</strong>
+        </li>
+        <li>
+            Average outdoor severity: <strong>{avgSeverity}</strong>
+        </li>
+        <li>
+            Most extreme game: <strong>{worstGameLabel}</strong>
+        </li>
+        </ul>
+
+        <h3>Notable Games</h3>
+        <ul>
+        {outliers.map(g => (
+            <li key={g.gameId}>
+            {g.label} — {g.totalPoints} pts (Severity {g.severity})
+            </li>
+        ))}
+        </ul>
 
       <p>
         Visual breakdown of scoring and weather impact for the selected week.
@@ -423,6 +451,18 @@ function Analytics() {
             Highlighted points show <strong>{selectedTeam}</strong> games relative to league-wide outcomes.
         </p>
         )}
+
+        <p className="chart-explainer">
+        Each point represents an outdoor game. Higher weather severity generally
+        corresponds to slightly lower total scoring, though variance remains high.
+        </p>
+
+        <h4>Weather Severity Scale</h4>
+        <ul>
+        <li><strong>0</strong> — Clear conditions</li>
+        <li><strong>1–2</strong> — Wind or cold present</li>
+        <li><strong>3+</strong> — High-impact weather</li>
+        </ul>
 
 
         {regression && (
