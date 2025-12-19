@@ -3,8 +3,6 @@ import GamesDashboard from "./pages/GamesDashboard";
 import GameDetail from "./pages/GameDetail";
 import Analytics from "./pages/Analytics";
 
-<Route path="/analytics" element={<Analytics />} />
-
 
 function App() {
   return (
@@ -17,6 +15,7 @@ function App() {
       <main className="app-content">
         <Routes>
           <Route path="/" element={<Navigate to="/games" replace />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/games" element={<GamesDashboard />} />
           <Route path="/game/:gameId" element={<GameDetail />} />
         </Routes>
