@@ -44,6 +44,23 @@ function Analytics() {
         Visual breakdown of scoring and weather impact for the selected week.
       </p>
 
+      <label>
+        Week:&nbsp;
+        <select
+            value={week}
+            onChange={(e) =>
+            setSearchParams({ season, week: Number(e.target.value) })
+            }
+        >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+            <option key={w} value={w}>
+                {w}
+            </option>
+            ))}
+        </select>
+        </label>
+
+
       <h3>Total Points per Game</h3>
 
         <table>
