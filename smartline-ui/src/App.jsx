@@ -1,6 +1,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import GamesDashboard from "./pages/GamesDashboard";
 import GameDetail from "./pages/GameDetail";
+import Analytics from "./pages/Analytics";
+
+<Route path="/analytics" element={<Analytics />} />
+
 
 function App() {
   return (
