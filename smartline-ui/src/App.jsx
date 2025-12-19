@@ -10,11 +10,13 @@ function App() {
         <p>NFL Betting Intelligence</p>
       </header>
 
-      <Routes>
-        <Route path="/" element={<Navigate to="/games" replace />} />
-        <Route path="/games" element={<GamesDashboard />} />
-        <Route path="/game/:gameId" element={<GameDetail />} />
-      </Routes>
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={<Navigate to="/games" replace />} />
+          <Route path="/games" element={<GamesDashboard />} />
+          <Route path="/game/:gameId" element={<GameDetail />} />
+        </Routes>
+      </main>
     </div>
   );
 }

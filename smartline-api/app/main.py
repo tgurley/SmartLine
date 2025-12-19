@@ -96,6 +96,7 @@ def get_games(
             w.temp_f,
             w.wind_mph,
             w.precip_prob,
+            w.precip_mm,
             w.weather_severity_score,
             w.is_cold,
             w.is_windy,
@@ -161,6 +162,7 @@ def get_games(
                 "temp_f": r["temp_f"],
                 "wind_mph": r["wind_mph"],
                 "precip_prob": r["precip_prob"],
+                "precip_mm": r["precip_mm"],
                 "severity_score": r["weather_severity_score"] or 0,
                 "flags": {
                     "cold": r["is_cold"] or False,
@@ -203,6 +205,7 @@ def get_game_detail(game_id: int):
             w.temp_f,
             w.wind_mph,
             w.precip_prob,
+            w.precip_mm,
             w.weather_severity_score,
             w.is_cold,
             w.is_windy,
@@ -249,6 +252,7 @@ def get_game_detail(game_id: int):
             "temp_f": row["temp_f"],
             "wind_mph": row["wind_mph"],
             "precip_prob": row["precip_prob"],
+            "precip_mm": row["precip_mm"],
             "severity_score": row["weather_severity_score"],
             "flags": {
                 "cold": row["is_cold"],
