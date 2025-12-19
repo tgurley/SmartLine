@@ -62,11 +62,13 @@ function Analytics() {
 
   const season = Number(searchParams.get("season")) || 2023;
   const week = Number(searchParams.get("week")) || 1;
+  const teamParam = searchParams.get("team") || "";
+  const [selectedTeam, setSelectedTeam] = useState(teamParam);
+
 
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState([]);
-  const [selectedTeam, setSelectedTeam] = useState("");
 
   const totals = games
     .filter(g => g.result)
@@ -272,6 +274,10 @@ function Analytics() {
 
     loadComparison();
     }, [season, week]);
+
+    useEffect(() => {
+    setSelectedTeam(teamParam);
+    }, [teamParam]);
 
 
   if (loading) return <p>Loading analytics...</p>;
@@ -485,7 +491,15 @@ function Analytics() {
         Team:&nbsp;
         <select
             value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
+            onChange={(e) => {
+                const newTeam = e.target.value;
+
+                setSearchParams({
+                season,
+                week,
+                ...(newTeam ? { team: newTeam } : {})
+                });
+            }}
         >
             <option value="">All Teams</option>
             {teams.map(t => (
