@@ -150,6 +150,66 @@ function Analytics() {
     ];
     }
 
+    function buildTeamRows(games) {
+        const rows = [];
+
+        games.forEach(g => {
+            if (!g.result) return;
+
+            const totalSeverity = g.weather.severity_score ?? 0;
+
+            // Away team row
+            rows.push({
+            team: g.away_team.abbrev,
+            pointsFor: g.result.away_score,
+            pointsAgainst: g.result.home_score,
+            severity: totalSeverity,
+            isDome: g.venue?.is_dome
+            });
+
+            // Home team row
+            rows.push({
+            team: g.home_team.abbrev,
+            pointsFor: g.result.home_score,
+            pointsAgainst: g.result.away_score,
+            severity: totalSeverity,
+            isDome: g.venue?.is_dome
+            });
+        });
+
+        return rows;
+        }
+    
+    const teamRows = buildTeamRows(games).filter(r => !r.isDome);
+
+    const teamStatsMap = {};
+
+    teamRows.forEach(r => {
+    if (!teamStatsMap[r.team]) {
+        teamStatsMap[r.team] = {
+        team: r.team,
+        games: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        totalSeverity: 0
+        };
+    }
+
+    const t = teamStatsMap[r.team];
+    t.games += 1;
+    t.pointsFor += r.pointsFor;
+    t.pointsAgainst += r.pointsAgainst;
+    t.totalSeverity += r.severity;
+    });
+
+    const teamStats = Object.values(teamStatsMap).map(t => ({
+    team: t.team,
+    games: t.games,
+    avgFor: t.pointsFor / t.games,
+    avgAgainst: t.pointsAgainst / t.games,
+    avgSeverity: t.totalSeverity / t.games
+    }));
+
 
 
 
@@ -412,6 +472,52 @@ function Analytics() {
             </LineChart>
         </ResponsiveContainer>
         </div>
+
+        <h3>Team Performance (Outdoor Games)</h3>
+
+        <table>
+        <thead>
+            <tr>
+            <th>Team</th>
+            <th>Games</th>
+            <th>Avg Points For</th>
+            <th>Avg Points Against</th>
+            <th>Avg Severity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {teamStats
+            .sort((a, b) => b.avgFor - a.avgFor)
+            .map(t => (
+                <tr key={t.team}>
+                <td>{t.team}</td>
+                <td>{t.games}</td>
+                <td>{t.avgFor.toFixed(1)}</td>
+                <td>{t.avgAgainst.toFixed(1)}</td>
+                <td>{t.avgSeverity.toFixed(2)}</td>
+                </tr>
+            ))}
+        </tbody>
+        </table>
+
+        <h3>Avg Points Scored by Team (Outdoor)</h3>
+
+        <div style={{ width: "100%", height: 400 }}>
+        <ResponsiveContainer>
+            <BarChart data={teamStats}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="team" />
+            <YAxis />
+            <Tooltip />
+            <Bar
+                dataKey="avgFor"
+                name="Avg Points For"
+                fill="#2563eb"
+            />
+            </BarChart>
+        </ResponsiveContainer>
+        </div>
+
 
     </section>
   );
