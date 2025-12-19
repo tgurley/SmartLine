@@ -9,7 +9,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Line
+  Line,
+  BarChart,
+  Bar,
+  Legend
 } from "recharts";
 
 
@@ -35,6 +38,33 @@ function Analytics() {
 
   const domeGames = totals.filter(g => g.isDome);
   const outdoorGames = totals.filter(g => !g.isDome);
+
+  const buckets = {
+    clear: { label: "Clear (0)", count: 0, totalPoints: 0 },
+    moderate: { label: "Moderate (1–2)", count: 0, totalPoints: 0 },
+    severe: { label: "Severe (3+)", count: 0, totalPoints: 0 }
+    };
+
+    outdoorGames.forEach(g => {
+    if (g.severity === 0) {
+        buckets.clear.count += 1;
+        buckets.clear.totalPoints += g.totalPoints;
+    } else if (g.severity <= 2) {
+        buckets.moderate.count += 1;
+        buckets.moderate.totalPoints += g.totalPoints;
+    } else {
+        buckets.severe.count += 1;
+        buckets.severe.totalPoints += g.totalPoints;
+    }
+    });
+
+    const bucketStats = Object.values(buckets)
+    .filter(b => b.count > 0)
+    .map(b => ({
+        ...b,
+        avgPoints: b.totalPoints / b.count
+    }));
+
 
   function linearRegression(points) {
     if (points.length < 2) return null;
@@ -212,6 +242,46 @@ function Analytics() {
             {regression.intercept.toFixed(1)}
         </p>
         )}
+
+        <h3>Average Total Points by Weather Severity</h3>
+
+        <table>
+        <thead>
+            <tr>
+            <th>Severity</th>
+            <th>Games</th>
+            <th>Avg Total Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {bucketStats.map(b => (
+            <tr key={b.label}>
+                <td>{b.label}</td>
+                <td>{b.count}</td>
+                <td>{b.avgPoints.toFixed(1)}</td>
+            </tr>
+            ))}
+        </tbody>
+        </table>
+
+        <h3>Scoring Impact by Weather Bucket</h3>
+
+        <div style={{ width: "100%", height: 300 }}>
+        <ResponsiveContainer>
+            <BarChart data={bucketStats}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar
+                dataKey="avgPoints"
+                name="Avg Total Points"
+                fill="#2563eb"
+            />
+            </BarChart>
+        </ResponsiveContainer>
+        </div>
 
 
     </section>
