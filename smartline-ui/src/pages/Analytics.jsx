@@ -1,6 +1,16 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { fetchGames } from "../api/games";
+import {
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts";
+
 
 function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -88,7 +98,46 @@ function Analytics() {
         </table>
 
 
-      {/* Charts will go here */}
+      <h3>Weather Severity vs Total Points</h3>
+
+        <div style={{ width: "100%", height: 400 }}>
+        <ResponsiveContainer>
+            <ScatterChart
+            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+            >
+            <CartesianGrid />
+            <XAxis
+                type="number"
+                dataKey="severity"
+                name="Weather Severity"
+                label={{ value: "Weather Severity Score", position: "bottom" }}
+            />
+            <YAxis
+                type="number"
+                dataKey="totalPoints"
+                name="Total Points"
+                label={{ value: "Total Points", angle: -90, position: "left" }}
+            />
+            <Tooltip
+                cursor={{ strokeDasharray: "3 3" }}
+                formatter={(value, name, props) => {
+                if (name === "totalPoints") return [`${value}`, "Total Points"];
+                if (name === "severity") return [`${value}`, "Severity"];
+                return value;
+                }}
+                labelFormatter={(_, payload) =>
+                payload?.[0]?.payload?.label ?? ""
+                }
+            />
+            <Scatter
+                name="Games"
+                data={totals}
+                fill="#2563eb"
+            />
+            </ScatterChart>
+        </ResponsiveContainer>
+        </div>
+
     </section>
   );
 }
