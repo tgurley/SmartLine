@@ -53,25 +53,28 @@ function Analytics() {
     return { slope, intercept };
     }
   
-  const regression = linearRegression(outdoorGames);
-  const trendlineData = regression
-    ? [
+  let trendlineData = [];
+    let regression = null;
+
+    if (outdoorGames.length >= 2) {
+    regression = linearRegression(outdoorGames);
+
+    const severities = outdoorGames.map(g => g.severity);
+    const minSeverity = Math.min(...severities);
+    const maxSeverity = Math.max(...severities);
+
+    trendlineData = [
         {
-            severity: Math.min(...outdoorGames.map(g => g.severity)),
-            totalPoints:
-            regression.slope *
-                Math.min(...outdoorGames.map(g => g.severity)) +
-            regression.intercept
+        severity: minSeverity,
+        totalPoints: regression.slope * minSeverity + regression.intercept
         },
         {
-            severity: Math.max(...outdoorGames.map(g => g.severity)),
-            totalPoints:
-            regression.slope *
-                Math.max(...outdoorGames.map(g => g.severity)) +
-            regression.intercept
+        severity: maxSeverity,
+        totalPoints: regression.slope * maxSeverity + regression.intercept
         }
-        ]
-    : [];
+    ];
+    }
+
 
 
 
@@ -201,7 +204,7 @@ function Analytics() {
             </ScatterChart>
         </ResponsiveContainer>
         </div>
-        
+
         {regression && (
         <p style={{ color: "#444", marginTop: "0.5rem" }}>
             Outdoor trend: total points ≈{" "}
