@@ -364,29 +364,6 @@ function Analytics() {
 
       <h2>Analytics — Week {week} ({season})</h2>
 
-      <h3>Week {week} Weather Impact Summary</h3>
-
-        <ul>
-        <li>
-            Average total points: <strong>{avgPoints}</strong>
-        </li>
-        <li>
-            Average outdoor severity: <strong>{avgSeverity}</strong>
-        </li>
-        <li>
-            Most extreme game: <strong>{worstGameLabel}</strong>
-        </li>
-        </ul>
-
-        <h3>Notable Games</h3>
-        <ul>
-        {outliers.map(g => (
-            <li key={g.gameId}>
-            {g.label} — {g.totalPoints} pts (Severity {g.severity})
-            </li>
-        ))}
-        </ul>
-
       <p>
         Visual breakdown of scoring and weather impact for the selected week.
       </p>
@@ -428,6 +405,28 @@ function Analytics() {
         </tbody>
         </table>
 
+        <h3>Week {week} Weather Impact Summary</h3>
+
+        <ul>
+        <li>
+            Average total points: <strong>{avgPoints}</strong>
+        </li>
+        <li>
+            Average outdoor severity: <strong>{avgSeverity}</strong>
+        </li>
+        <li>
+            Most extreme game: <strong>{worstGameLabel}</strong>
+        </li>
+        </ul>
+
+        <h3>Notable Games</h3>
+        <ul>
+        {outliers.map(g => (
+            <li key={g.gameId}>
+            {g.label} — {g.totalPoints} pts (Severity {g.severity})
+            </li>
+        ))}
+        </ul>
 
       <h3>Weather Severity vs Total Points</h3>
 
