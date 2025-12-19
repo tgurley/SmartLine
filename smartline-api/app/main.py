@@ -10,7 +10,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",   # local dev
         "http://127.0.0.1:5173",
-        # later you can add your Vercel URL here
+        "https://smart-line-three.vercel.app/",
     ],
     allow_credentials=True,
     allow_methods=["*"],
