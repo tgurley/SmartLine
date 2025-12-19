@@ -16,56 +16,6 @@ import {
   Legend
 } from "recharts";
 
-function WeatherTooltip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null;
-
-  const g = payload[0].payload;
-
-  return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #ccc",
-        padding: "0.75rem",
-        fontSize: "0.85rem"
-      }}
-    >
-      <strong>{g.label}</strong>
-        <div>
-        🏷 Team:{" "}
-        <strong>
-            {g.label.includes("@")
-            ? g.label.split(" @ ").includes(selectedTeam)
-                ? selectedTeam
-                : "League"
-            : "League"}
-        </strong>
-        </div>
-
-
-      <div>🏈 Total Points: {g.totalPoints}</div>
-      <div>⚠ Severity: {g.severity}</div>
-
-      {g.isDome ? (
-        <div>🏟 Dome game</div>
-      ) : (
-        <>
-          <div>🌡 Temp: {g.tempF ?? "N/A"} °F</div>
-          <div>💨 Wind: {g.windMph ?? "N/A"} mph</div>
-          <div>
-            🌧 Rain:{" "}
-            {g.rainMm == null
-              ? "N/A"
-              : g.rainMm === 0
-              ? "None"
-              : `${g.rainMm} mm`}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 
 function Analytics() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -75,6 +25,56 @@ function Analytics() {
   const week = Number(searchParams.get("week")) || 1;
   const teamParam = searchParams.get("team") || "";
   const [selectedTeam, setSelectedTeam] = useState(teamParam);
+
+  function WeatherTooltip({ active, payload }) {
+    if (!active || !payload || !payload.length) return null;
+
+    const g = payload[0].payload;
+
+    return (
+        <div
+        style={{
+            background: "white",
+            border: "1px solid #ccc",
+            padding: "0.75rem",
+            fontSize: "0.85rem"
+        }}
+        >
+        <strong>{g.label}</strong>
+            <div>
+            🏷 Team:{" "}
+            <strong>
+                {g.label.includes("@")
+                ? g.label.split(" @ ").includes(selectedTeam)
+                    ? selectedTeam
+                    : "League"
+                : "League"}
+            </strong>
+            </div>
+
+
+        <div>🏈 Total Points: {g.totalPoints}</div>
+        <div>⚠ Severity: {g.severity}</div>
+
+        {g.isDome ? (
+            <div>🏟 Dome game</div>
+        ) : (
+            <>
+            <div>🌡 Temp: {g.tempF ?? "N/A"} °F</div>
+            <div>💨 Wind: {g.windMph ?? "N/A"} mph</div>
+            <div>
+                🌧 Rain:{" "}
+                {g.rainMm == null
+                ? "N/A"
+                : g.rainMm === 0
+                ? "None"
+                : `${g.rainMm} mm`}
+            </div>
+            </>
+        )}
+        </div>
+    );
+    }
 
 
   const [games, setGames] = useState([]);
