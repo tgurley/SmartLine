@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
