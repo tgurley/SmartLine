@@ -31,6 +31,17 @@ function WeatherTooltip({ active, payload }) {
       }}
     >
       <strong>{g.label}</strong>
+        <div>
+        🏷 Team:{" "}
+        <strong>
+            {g.label.includes("@")
+            ? g.label.split(" @ ").includes(selectedTeam)
+                ? selectedTeam
+                : "League"
+            : "League"}
+        </strong>
+        </div>
+
 
       <div>🏈 Total Points: {g.totalPoints}</div>
       <div>⚠ Severity: {g.severity}</div>
@@ -86,6 +97,15 @@ function Analytics() {
 
   const domeGames = totals.filter(g => g.isDome);
   const outdoorGames = totals.filter(g => !g.isDome);
+
+  const teamGames = selectedTeam
+    ? outdoorGames.filter(
+        g =>
+            g.label.startsWith(`${selectedTeam} @`) ||
+            g.label.endsWith(`@ ${selectedTeam}`)
+        )
+    : [];
+
 
   const buckets = {
     clear: { label: "Clear (0)", count: 0, totalPoints: 0 },
@@ -359,12 +379,22 @@ function Analytics() {
             />
             <Tooltip content={<WeatherTooltip />} />
 
-            {/* Outdoor Games */}
+            {/* League baseline (all outdoor games) */}
             <Scatter
-                name="Outdoor"
-                data={outdoorGames}
-                fill="#2563eb"   // blue
+            name="League"
+            data={outdoorGames}
+            fill="#94a3b8"
+            opacity={0.5}
             />
+
+            {/* Selected team overlay */}
+            {selectedTeam && (
+            <Scatter
+                name={selectedTeam}
+                data={teamGames}
+                fill="#2563eb"
+            />
+            )}
 
             {/* Dome Games */}
             <Scatter
@@ -388,6 +418,12 @@ function Analytics() {
             </ScatterChart>
         </ResponsiveContainer>
         </div>
+        {selectedTeam && (
+        <p style={{ fontSize: "0.85rem", color: "#555" }}>
+            Highlighted points show <strong>{selectedTeam}</strong> games relative to league-wide outcomes.
+        </p>
+        )}
+
 
         {regression && (
         <p style={{ color: "#444", marginTop: "0.5rem" }}>
