@@ -9,7 +9,7 @@ app = FastAPI(title="SmartLine NFL Betting Intelligence")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_origin=r"http://localhost:5173",
+    allow_origin=r"http://localhost:5173/",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
