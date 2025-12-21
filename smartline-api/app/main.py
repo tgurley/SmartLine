@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
+from typing import Optional
 
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
 app.add_middleware(
@@ -260,3 +261,341 @@ def get_game_detail(game_id: int):
             }
         }
     }
+    
+@app.get("/odds")
+def get_odds(
+    season: int = Query(2023),
+    week: Optional[int] = Query(None),
+    game_id: Optional[int] = Query(None)
+):
+    """
+    Get odds data for games
+    Can filter by season, week, or specific game
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    # Build WHERE clause based on filters
+    where_clauses = ["s.year = %s"]
+    params = [season]
+    
+    if week:
+        where_clauses.append("g.week = %s")
+        params.append(week)
+    
+    if game_id:
+        where_clauses.append("g.game_id = %s")
+        params.append(game_id)
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    cur.execute(f"""
+        SELECT
+            g.game_id,
+            g.week,
+            g.game_datetime_utc,
+            
+            ht.abbrev AS home_team,
+            at.abbrev AS away_team,
+            
+            b.name AS book,
+            ol.market,
+            ol.side,
+            ol.line_value,
+            ol.price_american,
+            ol.pulled_at_utc,
+            
+            -- Determine if this is opening or closing
+            CASE 
+                WHEN ol.pulled_at_utc = MIN(ol.pulled_at_utc) OVER (PARTITION BY ol.game_id, ol.book_id, ol.market)
+                THEN 'opening'
+                ELSE 'closing'
+            END as line_type
+            
+        FROM odds_line ol
+        JOIN game g ON g.game_id = ol.game_id
+        JOIN season s ON s.season_id = g.season_id
+        JOIN team ht ON g.home_team_id = ht.team_id
+        JOIN team at ON g.away_team_id = at.team_id
+        JOIN book b ON b.book_id = ol.book_id
+        
+        WHERE {where_sql}
+        
+        ORDER BY g.game_datetime_utc, b.name, ol.market, ol.pulled_at_utc;
+    """, params)
+    
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    # Organize by game
+    games_odds = {}
+    
+    for row in rows:
+        game_id = row["game_id"]
+        
+        if game_id not in games_odds:
+            games_odds[game_id] = {
+                "game_id": game_id,
+                "week": row["week"],
+                "kickoff_utc": row["game_datetime_utc"],
+                "matchup": f"{row['away_team']} @ {row['home_team']}",
+                "books": {}
+            }
+        
+        book = row["book"]
+        if book not in games_odds[game_id]["books"]:
+            games_odds[game_id]["books"][book] = {
+                "spread": {"opening": None, "closing": None},
+                "total": {"opening": None, "closing": None},
+                "moneyline": {"opening": None, "closing": None}
+            }
+        
+        market = row["market"]
+        line_type = row["line_type"]
+        
+        games_odds[game_id]["books"][book][market][line_type] = {
+            "side": row["side"],
+            "line": row["line_value"],
+            "price": row["price_american"],
+            "pulled_at": row["pulled_at_utc"]
+        }
+    
+    return {
+        "season": season,
+        "week": week,
+        "game_id": game_id,
+        "games": list(games_odds.values())
+    }
+
+
+@app.get("/odds/game/{game_id}")
+def get_game_odds(game_id: int):
+    """
+    Get all odds for a specific game with line movement
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT
+            g.game_id,
+            g.week,
+            g.game_datetime_utc,
+            
+            ht.abbrev AS home_team,
+            at.abbrev AS away_team,
+            
+            b.name AS book,
+            ol.market,
+            ol.side,
+            ol.line_value,
+            ol.price_american,
+            ol.pulled_at_utc
+            
+        FROM odds_line ol
+        JOIN game g ON g.game_id = ol.game_id
+        JOIN team ht ON g.home_team_id = ht.team_id
+        JOIN team at ON g.away_team_id = at.team_id
+        JOIN book b ON b.book_id = ol.book_id
+        
+        WHERE g.game_id = %s
+        
+        ORDER BY b.name, ol.market, ol.pulled_at_utc;
+    """, (game_id,))
+    
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    if not rows:
+        return {"error": "No odds found for this game"}
+    
+    # Organize by book and market
+    game_info = {
+        "game_id": rows[0]["game_id"],
+        "week": rows[0]["week"],
+        "kickoff_utc": rows[0]["game_datetime_utc"],
+        "matchup": f"{rows[0]['away_team']} @ {rows[0]['home_team']}",
+        "books": {}
+    }
+    
+    for row in rows:
+        book = row["book"]
+        market = row["market"]
+        
+        if book not in game_info["books"]:
+            game_info["books"][book] = {}
+        
+        if market not in game_info["books"][book]:
+            game_info["books"][book][market] = []
+        
+        game_info["books"][book][market].append({
+            "side": row["side"],
+            "line": row["line_value"],
+            "price": row["price_american"],
+            "pulled_at": row["pulled_at_utc"]
+        })
+    
+    return game_info
+
+
+@app.get("/odds/movement")
+def get_line_movement(
+    season: int = Query(2023),
+    week: Optional[int] = Query(None),
+    market: str = Query("spread", description="spread, total, or moneyline")
+):
+    """
+    Get line movement data for spread/total analysis
+    Shows opening vs closing and movement magnitude
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    where_clauses = ["s.year = %s", "ol.market = %s"]
+    params = [season, market]
+    
+    if week:
+        where_clauses.append("g.week = %s")
+        params.append(week)
+    
+    where_sql = " AND ".join(where_clauses)
+    
+    cur.execute(f"""
+        WITH game_odds AS (
+            SELECT
+                g.game_id,
+                g.week,
+                g.game_datetime_utc,
+                ht.abbrev AS home_team,
+                at.abbrev AS away_team,
+                b.name AS book,
+                ol.market,
+                ol.side,
+                ol.line_value,
+                ol.pulled_at_utc,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ol.game_id, ol.book_id, ol.market, ol.side 
+                    ORDER BY ol.pulled_at_utc ASC
+                ) as rn_asc,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ol.game_id, ol.book_id, ol.market, ol.side 
+                    ORDER BY ol.pulled_at_utc DESC
+                ) as rn_desc
+            FROM odds_line ol
+            JOIN game g ON g.game_id = ol.game_id
+            JOIN season s ON s.season_id = g.season_id
+            JOIN team ht ON g.home_team_id = ht.team_id
+            JOIN team at ON g.away_team_id = at.team_id
+            JOIN book b ON b.book_id = ol.book_id
+            WHERE {where_sql}
+        )
+        SELECT
+            opening.game_id,
+            opening.week,
+            opening.game_datetime_utc,
+            opening.home_team,
+            opening.away_team,
+            opening.book,
+            opening.market,
+            opening.side,
+            opening.line_value as opening_line,
+            closing.line_value as closing_line,
+            closing.line_value - opening.line_value as movement,
+            opening.pulled_at_utc as opening_time,
+            closing.pulled_at_utc as closing_time
+        FROM game_odds opening
+        JOIN game_odds closing ON 
+            closing.game_id = opening.game_id 
+            AND closing.book = opening.book
+            AND closing.market = opening.market
+            AND closing.side = opening.side
+            AND closing.rn_desc = 1
+        WHERE opening.rn_asc = 1
+        ORDER BY ABS(closing.line_value - opening.line_value) DESC;
+    """, params)
+    
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    movements = []
+    for row in rows:
+        movements.append({
+            "game_id": row["game_id"],
+            "week": row["week"],
+            "matchup": f"{row['away_team']} @ {row['home_team']}",
+            "book": row["book"],
+            "market": row["market"],
+            "side": row["side"],
+            "opening_line": row["opening_line"],
+            "closing_line": row["closing_line"],
+            "movement": row["movement"],
+            "opening_time": row["opening_time"],
+            "closing_time": row["closing_time"]
+        })
+    
+    return {
+        "season": season,
+        "week": week,
+        "market": market,
+        "movements": movements
+    }
+
+
+@app.get("/odds/compare")
+def compare_odds(game_id: int, market: str = Query("spread")):
+    """
+    Compare current odds across all books for a specific game
+    Shows best available lines
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        WITH latest_odds AS (
+            SELECT
+                ol.*,
+                b.name as book_name,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ol.book_id, ol.market, ol.side 
+                    ORDER BY ol.pulled_at_utc DESC
+                ) as rn
+            FROM odds_line ol
+            JOIN book b ON b.book_id = ol.book_id
+            WHERE ol.game_id = %s AND ol.market = %s
+        )
+        SELECT
+            book_name,
+            side,
+            line_value,
+            price_american,
+            pulled_at_utc
+        FROM latest_odds
+        WHERE rn = 1
+        ORDER BY book_name, side;
+    """, (game_id, market))
+    
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    # Find best lines
+    comparison = {
+        "game_id": game_id,
+        "market": market,
+        "books": [],
+        "best_lines": {}
+    }
+    
+    for row in rows:
+        comparison["books"].append({
+            "book": row["book_name"],
+            "side": row["side"],
+            "line": row["line_value"],
+            "price": row["price_american"],
+            "updated": row["pulled_at_utc"]
+        })
+    
+    return comparison
