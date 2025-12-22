@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from player_endpoints import router as player_router
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(player_router)
 
 @app.post("/backtest")
 def backtest(strategy: StrategyRequest):
