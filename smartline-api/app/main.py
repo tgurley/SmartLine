@@ -9,8 +9,10 @@ from typing import Optional
 app = FastAPI(title="SmartLine NFL Betting Intelligence")
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_origins="http://localhost:5173",
+    allow_origins=[                                 # ← List format
+    "http://localhost:5173",
+    "https://*.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
