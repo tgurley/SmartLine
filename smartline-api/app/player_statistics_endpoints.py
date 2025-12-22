@@ -27,7 +27,8 @@ def get_conn():
         dbname=os.environ["PGDATABASE"],
         user=os.environ["PGUSER"],
         password=os.environ["PGPASSWORD"],
-        port=os.environ.get("PGPORT", 5432)
+        port=os.environ.get("PGPORT", 5432),
+        cursor_factory=RealDictCursor
     )
     
 router = APIRouter(prefix="/statistics", tags=["Player Statistics"])
@@ -46,6 +47,33 @@ async def get_player_all_statistics(
     Get all statistics for a player, optionally filtered by season
     
     Returns data grouped by season and stat_group
+    
+    Response format:
+    {
+        "player_id": 123,
+        "seasons": [
+            {
+                "season": 2023,
+                "team_name": "Kansas City Chiefs",
+                "team_abbrev": "KC",
+                "stat_groups": {
+                    "Passing": {
+                        "yards": "4839",
+                        "passing touchdowns": "41",
+                        ...
+                    },
+                    "Rushing": { ... }
+                },
+                "last_updated": "2024-12-22T10:30:00Z"
+            }
+        ]
+    }
+    
+    Frontend usage:
+    - Without season: GET /statistics/players/123/statistics
+      Returns all seasons
+    - With season: GET /statistics/players/123/statistics?season=2023
+      Returns only 2023 season
     """
     conn = get_conn()
     
@@ -90,7 +118,19 @@ async def get_player_all_statistics(
             results = cur.fetchall()
             
             if not results:
-                raise HTTPException(status_code=404, detail="No statistics found for this player")
+                # Check if player exists
+                cur.execute("SELECT player_id FROM player WHERE player_id = %s", (player_id,))
+                player_exists = cur.fetchone()
+                
+                if not player_exists:
+                    raise HTTPException(status_code=404, detail="Player not found")
+                else:
+                    # Player exists but has no statistics
+                    return {
+                        'player_id': player_id,
+                        'seasons': [],
+                        'message': 'No statistics available for this player'
+                    }
             
             seasons_data = {}
             for row in results:
