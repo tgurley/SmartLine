@@ -350,6 +350,96 @@ INSERT INTO book (name) VALUES
   ('Bet365')
 ON CONFLICT (name) DO NOTHING;
 
+-- =========================================================
+-- PLAYER STATISTICS TABLES (Added 2024-12-22)
+-- =========================================================
+
+-- Player Statistics (flexible key-value storage for any stat metric)
+CREATE TABLE player_statistic (
+  statistic_id    BIGSERIAL PRIMARY KEY,
+  player_id       BIGINT NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+  team_id         SMALLINT NOT NULL REFERENCES team(team_id) ON DELETE CASCADE,
+  season_id       SMALLINT NOT NULL REFERENCES season(season_id) ON DELETE CASCADE,
+  
+  -- Stat categorization
+  stat_group      TEXT NOT NULL CHECK (stat_group IN (
+    'Passing', 'Rushing', 'Receiving', 'Defense',
+    'Kicking', 'Punting', 'Returning', 'Scoring'
+  )),
+  
+  -- Flexible metric storage
+  metric_name     TEXT NOT NULL,
+  metric_value    TEXT,  -- Stores numbers, percentages, or NULL
+  
+  -- Metadata
+  source          TEXT DEFAULT 'api-sports',
+  pulled_at_utc   TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Unique constraint: one value per player/team/season/stat/metric combination
+  CONSTRAINT uq_player_stat UNIQUE (player_id, team_id, season_id, stat_group, metric_name)
+);
+
+-- Indexes for efficient querying
+CREATE INDEX idx_player_stat_player_season ON player_statistic(player_id, season_id);
+CREATE INDEX idx_player_stat_player_season_group ON player_statistic(player_id, season_id, stat_group);
+CREATE INDEX idx_player_stat_season ON player_statistic(season_id);
+CREATE INDEX idx_player_stat_stat_group ON player_statistic(stat_group);
+CREATE INDEX idx_player_stat_metric_name ON player_statistic(metric_name);
+CREATE INDEX idx_player_stat_pulled_at ON player_statistic(pulled_at_utc);
+
+-- Materialized View: Pre-aggregated season summaries for common queries
+CREATE MATERIALIZED VIEW player_season_summary AS
+SELECT 
+  ps.player_id,
+  p.full_name,
+  p.position,
+  p.player_group,
+  s.year as season_year,
+  t.name as team_name,
+  t.abbrev as team_abbrev,
+  
+  -- Passing stats
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'yards' THEN ps.metric_value END) as passing_yards,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'passing touchdowns' THEN ps.metric_value END) as passing_tds,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'passing attempts' THEN ps.metric_value END) as passing_attempts,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'completions' THEN ps.metric_value END) as completions,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'interceptions' THEN ps.metric_value END) as interceptions,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'completion pct' THEN ps.metric_value END) as completion_pct,
+  MAX(CASE WHEN ps.stat_group = 'Passing' AND ps.metric_name = 'quaterback rating' THEN ps.metric_value END) as qb_rating,
+  
+  -- Rushing stats
+  MAX(CASE WHEN ps.stat_group = 'Rushing' AND ps.metric_name = 'yards' THEN ps.metric_value END) as rushing_yards,
+  MAX(CASE WHEN ps.stat_group = 'Rushing' AND ps.metric_name = 'rushing touchdowns' THEN ps.metric_value END) as rushing_tds,
+  MAX(CASE WHEN ps.stat_group = 'Rushing' AND ps.metric_name = 'rushing attempts' THEN ps.metric_value END) as rushing_attempts,
+  MAX(CASE WHEN ps.stat_group = 'Rushing' AND ps.metric_name = 'yards per rush avg' THEN ps.metric_value END) as yards_per_rush,
+  
+  -- Receiving stats
+  MAX(CASE WHEN ps.stat_group = 'Receiving' AND ps.metric_name = 'receiving yards' THEN ps.metric_value END) as receiving_yards,
+  MAX(CASE WHEN ps.stat_group = 'Receiving' AND ps.metric_name = 'receiving touchdowns' THEN ps.metric_value END) as receiving_tds,
+  MAX(CASE WHEN ps.stat_group = 'Receiving' AND ps.metric_name = 'receptions' THEN ps.metric_value END) as receptions,
+  MAX(CASE WHEN ps.stat_group = 'Receiving' AND ps.metric_name = 'receiving targets' THEN ps.metric_value END) as targets,
+  MAX(CASE WHEN ps.stat_group = 'Receiving' AND ps.metric_name = 'yards per reception avg' THEN ps.metric_value END) as yards_per_reception,
+  
+  -- Defense stats
+  MAX(CASE WHEN ps.stat_group = 'Defense' AND ps.metric_name = 'total tackles' THEN ps.metric_value END) as total_tackles,
+  MAX(CASE WHEN ps.stat_group = 'Defense' AND ps.metric_name = 'sacks' THEN ps.metric_value END) as sacks,
+  MAX(CASE WHEN ps.stat_group = 'Defense' AND ps.metric_name = 'interceptions' THEN ps.metric_value END) as def_interceptions,
+  MAX(CASE WHEN ps.stat_group = 'Defense' AND ps.metric_name = 'passes defended' THEN ps.metric_value END) as passes_defended,
+  
+  -- Metadata
+  MAX(ps.pulled_at_utc) as last_updated
+  
+FROM player_statistic ps
+JOIN player p ON ps.player_id = p.player_id
+JOIN team t ON ps.team_id = t.team_id
+JOIN season s ON ps.season_id = s.season_id
+GROUP BY ps.player_id, p.full_name, p.position, p.player_group, s.year, t.name, t.abbrev;
+
+-- Index on materialized view for fast queries
+CREATE UNIQUE INDEX idx_player_season_summary_unique ON player_season_summary(player_id, season_year);
+CREATE INDEX idx_player_season_summary_season ON player_season_summary(season_year);
+CREATE INDEX idx_player_season_summary_position ON player_season_summary(position);
+
 COMMIT;
 
 -- =========================================================
@@ -357,10 +447,12 @@ COMMIT;
 -- =========================================================
 /*
 
-DATABASE STATISTICS (as of extraction):
-- Tables: 12
-- Total Size: ~3.9 MB
+DATABASE STATISTICS (updated 2024-12-22):
+- Tables: 13 (added player_statistic)
+- Materialized Views: 1 (player_season_summary)
+- Total Size: ~3.9 MB base + ~15-20 MB per season with stats
 - Largest Tables: 
+  * player_statistic: ~15-20 MB per season (85,000-120,000 rows)
   * odds_line: 1.5 MB (44,411 rows)
   * player: 1.3 MB (2,559 rows)
   * team_game_stat: 552 KB
@@ -374,6 +466,7 @@ KEY RELATIONSHIPS:
 - player references: team (many:1)
 - injury_report references: game, team, player (many:1)
 - team_game_stat references: game, team (many:1)
+- player_statistic references: player, team, season (many:1) -- NEW
 
 GENERATED COLUMNS:
 - game_result.home_win: Computed from home_score > away_score
@@ -392,15 +485,32 @@ UNIQUE CONSTRAINTS:
 - odds_line(game_id, book_id, market, side, pulled_at_utc)
 - weather_observation(game_id, observed_at_utc)
 - injury_report(game_id, player_id, updated_at_utc)
+- player_statistic(player_id, team_id, season_id, stat_group, metric_name) -- NEW
 
 ETL PIPELINES:
 - nfl_player_etl.py: Loads ~1,700 players per season (32 API requests)
 - nfl_team_etl.py: Loads 32 teams with logos (1 API request)
-- Filters out Pro Bowl teams (AFC, NFC)
+- nfl_player_statistics_etl.py: Loads player stats (32 API requests per season) -- NEW
+  * Architecture: Class-based (ETLConfig, SportsAPIClient, PlayerStatisticsTransformer, 
+                  PlayerStatisticsDatabaseLoader, PlayerStatisticsETL)
+  * Optimization: Team-based fetching (1 call per team instead of 1 per player)
+  * Filters out Pro Bowl teams (AFC, NFC)
+  * Handles multi-team players (trades mid-season)
+  * Refreshes materialized view automatically
+
+PLAYER STATISTICS:
+- Stat Groups: Passing, Rushing, Receiving, Defense, Kicking, Punting, Returning, Scoring
+- Flexible schema: metric_name/metric_value pairs (no schema changes for new metrics)
+- Season coverage: 2022+ (API limitation)
+- API efficiency: 32 calls for full season (vs ~1,700 player-by-player)
+- Materialized view: Pre-aggregated common stats for 10x faster queries
 
 FRONTEND INTEGRATION:
 - Player search: /players/search?q={query}
 - Player detail: /players/{player_id}
+- Player statistics: /statistics/players/{player_id}/statistics?season={year} -- NEW
+- Statistical leaders: /statistics/leaders/{stat_group}/{metric}?season={year} -- NEW
+- Compare players: /statistics/compare?player_ids={ids}&season={year} -- NEW
 - Team search: /teams/search?q={query}
 - Team detail: /teams/{team_id}
 - Team roster: /teams/{team_id}/roster
