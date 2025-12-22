@@ -198,8 +198,14 @@ def get_game_detail(game_id: int):
             at.name AS away_team_name,
             at.abbrev AS away_team_abbrev,
 
+            v.name AS venue_name,
+            v.city AS venue_city,
+            v.state AS venue_state,
+            v.is_dome,
+
             r.home_score,
             r.away_score,
+            r.home_win,
 
             w.temp_f,
             w.wind_mph,
@@ -216,6 +222,7 @@ def get_game_detail(game_id: int):
         FROM game g
         JOIN team ht ON g.home_team_id = ht.team_id
         JOIN team at ON g.away_team_id = at.team_id
+        LEFT JOIN venue v ON g.venue_id = v.venue_id
         LEFT JOIN game_result r ON r.game_id = g.game_id
         LEFT JOIN weather_observation w ON w.game_id = g.game_id
         WHERE g.game_id = %s;
@@ -233,32 +240,41 @@ def get_game_detail(game_id: int):
         "kickoff_utc": row["kickoff_utc"],
         "status": row["status"],
         "home_team": {
+            "team_id": row["home_team_id"],
             "name": row["home_team_name"],
             "abbrev": row["home_team_abbrev"]
         },
         "away_team": {
+            "team_id": row["away_team_id"],
             "name": row["away_team_name"],
             "abbrev": row["away_team_abbrev"]
+        },
+        "venue": {
+            "name": row["venue_name"],
+            "city": row["venue_city"],
+            "state": row["venue_state"],
+            "is_dome": row["is_dome"]
         },
         "result": (
             {
                 "home_score": row["home_score"],
-                "away_score": row["away_score"]
+                "away_score": row["away_score"],
+                "winner": "home" if row["home_win"] else "away"
             } if row["home_score"] is not None else None
         ),
         "weather": {
-            "source": row["weather_source"],
+            "source": row["weather_source"] or "dome",
             "temp_f": row["temp_f"],
             "wind_mph": row["wind_mph"],
             "precip_prob": row["precip_prob"],
             "precip_mm": row["precip_mm"],
-            "severity_score": row["weather_severity_score"],
+            "severity_score": row["weather_severity_score"] or 0,
             "flags": {
-                "cold": row["is_cold"],
-                "windy": row["is_windy"],
-                "heavy_wind": row["is_heavy_wind"],
-                "rain_risk": row["is_rain_risk"],
-                "storm_risk": row["is_storm_risk"],
+                "cold": row["is_cold"] or False,
+                "windy": row["is_windy"] or False,
+                "heavy_wind": row["is_heavy_wind"] or False,
+                "rain_risk": row["is_rain_risk"] or False,
+                "storm_risk": row["is_storm_risk"] or False,
             }
         }
     }
