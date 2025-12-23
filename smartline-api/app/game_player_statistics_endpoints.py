@@ -252,27 +252,11 @@ async def get_player_game_statistics(
         JOIN team t ON gps.team_id = t.team_id
         JOIN team ht ON g.home_team_id = ht.team_id
         JOIN team at ON g.away_team_id = at.team_id
-        ORDER BY g.game_datetime_utc DESC;
+        WHERE gps.player_id = %s          -- 🔥 THIS WAS MISSING
+        ORDER BY rg.game_datetime_utc DESC;
     """
     
-    params = [player_id]
-    season_filter = ""
-    stat_group_filter = ""
-    
-    if season:
-        season_filter = "AND s.year = %s"
-        params.append(season)
-    
-    if stat_group:
-        stat_group_filter = "AND gps.stat_group = %s"
-        params.append(stat_group)
-    
-    params.append(limit)
-    
-    query = query.format(
-        season_filter=season_filter,
-        stat_group_filter=stat_group_filter
-    )
+    params = [player_id, season, limit, player_id]
     
     try:
         with get_conn() as conn:
