@@ -313,114 +313,6 @@ async def get_team_game_statistics(
             detail=f"Database error: {str(e)}"
         )
 
-
-@router.get(
-    "/teams/leaders/{stat_category}",
-    response_model=List[StatLeader],
-    summary="Get Statistical Leaders"
-)
-async def get_stat_leaders(
-    stat_category: str = Path(
-        ...,
-        description="Stat category (e.g., 'yards_total', 'passing_yards', 'rushing_yards', 'sacks_total')"
-    ),
-    season: Optional[int] = Query(None, description="Filter by season"),
-    limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
-):
-    """
-    Get statistical leaders for a specific category.
-    
-    Available categories:
-    - yards_total: Total yards
-    - passing_yards: Passing yards
-    - rushing_yards: Rushing yards
-    - first_downs_total: First downs
-    - sacks_total: Sacks (defensive)
-    - turnovers_total: Turnovers forced
-    - points_against_total: Points allowed
-    """
-    # Validate stat category (basic SQL injection prevention)
-    valid_stats = [
-        'yards_total', 'passing_yards', 'rushing_yards', 'first_downs_total',
-        'sacks_total', 'turnovers_total', 'points_against_total', 'plays_total',
-        'interceptions_total', 'fumbles_recovered_total'
-    ]
-    
-    if stat_category not in valid_stats:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid stat category. Must be one of: {', '.join(valid_stats)}"
-        )
-    
-    # Build the query with proper WHERE clause handling
-    if season:
-        query = f"""
-            SELECT 
-                gts.team_id,
-                t.name as team_name,
-                t.abbrev as team_abbrev,
-                gts.game_id,
-                g.week,
-                g.game_datetime_utc as game_date,
-                gts.{stat_category} as stat_value,
-                CASE 
-                    WHEN gts.team_id = g.home_team_id THEN at.name
-                    ELSE ht.name
-                END as opponent
-            FROM game_team_statistics gts
-            JOIN game g ON gts.game_id = g.game_id
-            JOIN season s ON g.season_id = s.season_id
-            JOIN team t ON gts.team_id = t.team_id
-            JOIN team ht ON g.home_team_id = ht.team_id
-            JOIN team at ON g.away_team_id = at.team_id
-            WHERE s.year = %s
-              AND gts.{stat_category} IS NOT NULL
-            ORDER BY gts.{stat_category} DESC
-            LIMIT %s
-        """
-        params = [season, limit]
-    else:
-        query = f"""
-            SELECT 
-                gts.team_id,
-                t.name as team_name,
-                t.abbrev as team_abbrev,
-                gts.game_id,
-                g.week,
-                g.game_datetime_utc as game_date,
-                gts.{stat_category} as stat_value,
-                CASE 
-                    WHEN gts.team_id = g.home_team_id THEN at.name
-                    ELSE ht.name
-                END as opponent
-            FROM game_team_statistics gts
-            JOIN game g ON gts.game_id = g.game_id
-            JOIN team t ON gts.team_id = t.team_id
-            JOIN team ht ON g.home_team_id = ht.team_id
-            JOIN team at ON g.away_team_id = at.team_id
-            WHERE gts.{stat_category} IS NOT NULL
-            ORDER BY gts.{stat_category} DESC
-            LIMIT %s
-        """
-        params = [limit]
-    
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(query, tuple(params))
-                rows = cur.fetchall()
-                
-                columns = [desc[0] for desc in cur.description]
-                leaders = [dict(zip(columns, row)) for row in rows]
-                
-                return [StatLeader(**leader) for leader in leaders]
-                
-    except psycopg2.Error as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {str(e)}"
-        )
-
 # Add these new endpoints to game_team_statistics_endpoints.py
 
 @router.get(
@@ -716,6 +608,112 @@ def get_team_conference_division(team_abbrev: str) -> tuple:
     
     return team_mapping.get(team_abbrev, ('Unknown', 'Unknown'))
 
+@router.get(
+    "/teams/leaders/{stat_category}",
+    response_model=List[StatLeader],
+    summary="Get Statistical Leaders"
+)
+async def get_stat_leaders(
+    stat_category: str = Path(
+        ...,
+        description="Stat category (e.g., 'yards_total', 'passing_yards', 'rushing_yards', 'sacks_total')"
+    ),
+    season: Optional[int] = Query(None, description="Filter by season"),
+    limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
+):
+    """
+    Get statistical leaders for a specific category.
+    
+    Available categories:
+    - yards_total: Total yards
+    - passing_yards: Passing yards
+    - rushing_yards: Rushing yards
+    - first_downs_total: First downs
+    - sacks_total: Sacks (defensive)
+    - turnovers_total: Turnovers forced
+    - points_against_total: Points allowed
+    """
+    # Validate stat category (basic SQL injection prevention)
+    valid_stats = [
+        'yards_total', 'passing_yards', 'rushing_yards', 'first_downs_total',
+        'sacks_total', 'turnovers_total', 'points_against_total', 'plays_total',
+        'interceptions_total', 'fumbles_recovered_total'
+    ]
+    
+    if stat_category not in valid_stats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid stat category. Must be one of: {', '.join(valid_stats)}"
+        )
+    
+    # Build the query with proper WHERE clause handling
+    if season:
+        query = f"""
+            SELECT 
+                gts.team_id,
+                t.name as team_name,
+                t.abbrev as team_abbrev,
+                gts.game_id,
+                g.week,
+                g.game_datetime_utc as game_date,
+                gts.{stat_category} as stat_value,
+                CASE 
+                    WHEN gts.team_id = g.home_team_id THEN at.name
+                    ELSE ht.name
+                END as opponent
+            FROM game_team_statistics gts
+            JOIN game g ON gts.game_id = g.game_id
+            JOIN season s ON g.season_id = s.season_id
+            JOIN team t ON gts.team_id = t.team_id
+            JOIN team ht ON g.home_team_id = ht.team_id
+            JOIN team at ON g.away_team_id = at.team_id
+            WHERE s.year = %s
+              AND gts.{stat_category} IS NOT NULL
+            ORDER BY gts.{stat_category} DESC
+            LIMIT %s
+        """
+        params = [season, limit]
+    else:
+        query = f"""
+            SELECT 
+                gts.team_id,
+                t.name as team_name,
+                t.abbrev as team_abbrev,
+                gts.game_id,
+                g.week,
+                g.game_datetime_utc as game_date,
+                gts.{stat_category} as stat_value,
+                CASE 
+                    WHEN gts.team_id = g.home_team_id THEN at.name
+                    ELSE ht.name
+                END as opponent
+            FROM game_team_statistics gts
+            JOIN game g ON gts.game_id = g.game_id
+            JOIN team t ON gts.team_id = t.team_id
+            JOIN team ht ON g.home_team_id = ht.team_id
+            JOIN team at ON g.away_team_id = at.team_id
+            WHERE gts.{stat_category} IS NOT NULL
+            ORDER BY gts.{stat_category} DESC
+            LIMIT %s
+        """
+        params = [limit]
+    
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+                
+                columns = [desc[0] for desc in cur.description]
+                leaders = [dict(zip(columns, row)) for row in rows]
+                
+                return [StatLeader(**leader) for leader in leaders]
+                
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
 
 @router.get(
     "/teams/{team_id}/standings",
