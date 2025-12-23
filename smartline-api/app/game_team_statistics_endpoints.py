@@ -320,6 +320,18 @@ These are NEW endpoints, not modifications to existing ones!
 
 # ==================== ADD THESE AS NEW ENDPOINTS ====================
 
+"""
+CORRECTED Team Endpoints - Using game_result table
+Add these 3 NEW endpoints to your backend
+"""
+
+from typing import Optional, List
+from datetime import datetime
+import psycopg2
+from fastapi import APIRouter, HTTPException, Query, Path
+
+# ==================== ADD THESE 3 NEW ENDPOINTS ====================
+
 @router.get(
     "/teams/leaders/points",
     summary="Get Points Scored Leaders"
@@ -329,7 +341,8 @@ async def get_team_points_leaders(
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    NEW ENDPOINT - Get team leaders for points scored per game.
+    Get team leaders for points scored per game.
+    Uses game_result table for scores.
     """
     
     if season:
@@ -343,15 +356,14 @@ async def get_team_points_leaders(
                     g.week,
                     g.game_datetime_utc,
                     CASE 
-                        WHEN g.home_team_id = t.team_id THEN g.home_score
-                        WHEN g.away_team_id = t.team_id THEN g.away_score
+                        WHEN g.home_team_id = t.team_id THEN gr.home_score
+                        WHEN g.away_team_id = t.team_id THEN gr.away_score
                     END as team_score
                 FROM team t
                 INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN game_result gr ON g.game_id = gr.game_id
                 INNER JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
-                  AND g.home_score IS NOT NULL
-                  AND g.away_score IS NOT NULL
             ),
             team_avg AS (
                 SELECT 
@@ -385,13 +397,12 @@ async def get_team_points_leaders(
                     t.name as team_name,
                     t.abbrev as team_abbrev,
                     CASE 
-                        WHEN g.home_team_id = t.team_id THEN g.home_score
-                        WHEN g.away_team_id = t.team_id THEN g.away_score
+                        WHEN g.home_team_id = t.team_id THEN gr.home_score
+                        WHEN g.away_team_id = t.team_id THEN gr.away_score
                     END as team_score
                 FROM team t
                 INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                WHERE g.home_score IS NOT NULL
-                  AND g.away_score IS NOT NULL
+                INNER JOIN game_result gr ON g.game_id = gr.game_id
             ),
             team_avg AS (
                 SELECT 
@@ -445,7 +456,8 @@ async def get_team_points_allowed_leaders(
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    NEW ENDPOINT - Get team leaders for points allowed (best defense).
+    Get team leaders for points allowed (best defense).
+    Uses game_result table for scores.
     """
     
     if season:
@@ -459,15 +471,14 @@ async def get_team_points_allowed_leaders(
                     g.week,
                     g.game_datetime_utc,
                     CASE 
-                        WHEN g.home_team_id = t.team_id THEN g.away_score
-                        WHEN g.away_team_id = t.team_id THEN g.home_score
+                        WHEN g.home_team_id = t.team_id THEN gr.away_score
+                        WHEN g.away_team_id = t.team_id THEN gr.home_score
                     END as points_allowed
                 FROM team t
                 INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN game_result gr ON g.game_id = gr.game_id
                 INNER JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
-                  AND g.home_score IS NOT NULL
-                  AND g.away_score IS NOT NULL
             ),
             team_avg AS (
                 SELECT 
@@ -501,13 +512,12 @@ async def get_team_points_allowed_leaders(
                     t.name as team_name,
                     t.abbrev as team_abbrev,
                     CASE 
-                        WHEN g.home_team_id = t.team_id THEN g.away_score
-                        WHEN g.away_team_id = t.team_id THEN g.home_score
+                        WHEN g.home_team_id = t.team_id THEN gr.away_score
+                        WHEN g.away_team_id = t.team_id THEN gr.home_score
                     END as points_allowed
                 FROM team t
                 INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                WHERE g.home_score IS NOT NULL
-                  AND g.away_score IS NOT NULL
+                INNER JOIN game_result gr ON g.game_id = gr.game_id
             ),
             team_avg AS (
                 SELECT 
@@ -693,7 +703,8 @@ async def get_team_standings(
     season: int = Query(..., description="Season year")
 ):
     """
-    NEW ENDPOINT - Get team's conference and division rankings.
+    Get team's conference and division rankings.
+    Uses game_result table for scores.
     """
     
     try:
@@ -712,7 +723,7 @@ async def get_team_standings(
                 team_name, team_abbrev = team_row
                 conference, division = get_team_conference_division(team_abbrev)
                 
-                # FIXED QUERY - Use INNER JOIN and proper column names
+                # Calculate standings using game_result table
                 query = """
                     WITH team_records AS (
                         SELECT 
@@ -721,24 +732,23 @@ async def get_team_standings(
                             t.abbrev,
                             COUNT(g.game_id) as games_played,
                             SUM(CASE 
-                                WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) OR
-                                     (g.away_team_id = t.team_id AND g.away_score > g.home_score)
+                                WHEN (g.home_team_id = t.team_id AND gr.home_score > gr.away_score) OR
+                                     (g.away_team_id = t.team_id AND gr.away_score > gr.home_score)
                                 THEN 1 ELSE 0 
                             END) as wins,
                             SUM(CASE 
-                                WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) OR
-                                     (g.away_team_id = t.team_id AND g.away_score < g.home_score)
+                                WHEN (g.home_team_id = t.team_id AND gr.home_score < gr.away_score) OR
+                                     (g.away_team_id = t.team_id AND gr.away_score < gr.home_score)
                                 THEN 1 ELSE 0 
                             END) as losses,
                             SUM(CASE 
-                                WHEN g.home_score = g.away_score THEN 1 ELSE 0 
+                                WHEN gr.home_score = gr.away_score THEN 1 ELSE 0 
                             END) as ties
                         FROM team t
                         INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                        INNER JOIN game_result gr ON g.game_id = gr.game_id
                         INNER JOIN season s ON g.season_id = s.season_id
                         WHERE s.year = %s
-                          AND g.home_score IS NOT NULL
-                          AND g.away_score IS NOT NULL
                         GROUP BY t.team_id, t.name, t.abbrev
                     )
                     SELECT 
@@ -800,15 +810,3 @@ async def get_team_standings(
             status_code=500,
             detail=f"Database error: {str(e)}"
         )
-
-
-
-
-
-
-
-
-
-
-
-
