@@ -9,6 +9,8 @@
 --   - Reference/Dimension: league, season, team, venue, book, player
 --   - Core Facts: game, game_result, odds_line
 --   - Analytics: weather_observation, injury_report, team_game_stat
+--   - Game Statistics: game_team_statistics, game_player_statistics (NEW)
+--   - Season Statistics: player_statistic
 --
 -- Last Updated: 2024-12-22
 -- =========================================================
@@ -197,128 +199,178 @@ CREATE TABLE injury_report (
 CREATE INDEX idx_injury_game ON injury_report(game_id);
 CREATE INDEX idx_injury_player ON injury_report(player_id);
 CREATE INDEX idx_injury_team ON injury_report(team_id);
+CREATE INDEX idx_injury_status ON injury_report(status);
 
 -- =========================================================
 -- WEATHER DATA
 -- =========================================================
 
--- Weather Observations (with severity scoring)
+-- Weather Observations (venue conditions during games)
 CREATE TABLE weather_observation (
-  obs_id                    BIGSERIAL PRIMARY KEY,
-  game_id                   BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
+  observation_id   BIGSERIAL PRIMARY KEY,
+  game_id          BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
+  observed_at_utc  TIMESTAMPTZ NOT NULL,
   
-  -- Core weather data
-  temp_f                    NUMERIC(5,2) CHECK (temp_f IS NULL OR (temp_f > -40 AND temp_f < 130)),
-  temp_c                    NUMERIC(5,2),
-  wind_mph                  NUMERIC(5,2),
-  precip_prob               NUMERIC(5,2) CHECK (precip_prob IS NULL OR (precip_prob BETWEEN 0 AND 100)),
-  precip_mm                 NUMERIC,
-  conditions                TEXT,
+  -- Weather conditions
+  temperature_f    NUMERIC(5,2),
+  humidity_pct     NUMERIC(5,2),
+  wind_speed_mph   NUMERIC(5,2),
+  wind_direction   TEXT,
+  precipitation    TEXT,
+  condition        TEXT,
   
-  -- Metadata
-  observed_at_utc           TIMESTAMPTZ NOT NULL,
-  source                    TEXT,
-  
-  -- Computed flags
-  is_cold                   BOOLEAN,
-  is_hot                    BOOLEAN,
-  is_windy                  BOOLEAN,
-  is_heavy_wind             BOOLEAN,
-  is_rain_risk              BOOLEAN,
-  is_storm_risk             BOOLEAN,
-  weather_severity_score    SMALLINT CHECK (weather_severity_score IS NULL OR (weather_severity_score BETWEEN 0 AND 100)),
+  source           TEXT,
   
   UNIQUE (game_id, observed_at_utc)
 );
 
-CREATE INDEX idx_weather_game_time
-  ON weather_observation(game_id, observed_at_utc);
-
-CREATE INDEX idx_weather_severity
-  ON weather_observation(weather_severity_score)
-  WHERE weather_severity_score IS NOT NULL;
+CREATE INDEX idx_weather_game ON weather_observation(game_id);
+CREATE INDEX idx_weather_time ON weather_observation(observed_at_utc);
 
 -- =========================================================
--- TEAM STATISTICS
+-- TEAM GAME STATISTICS (Added 2024-12-22)
 -- =========================================================
 
--- Team Game Stats (flexible key-value for any metric)
+-- Team Game Statistics (individual game performance)
 CREATE TABLE team_game_stat (
-  game_id        BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
-  team_id        SMALLINT NOT NULL REFERENCES team(team_id) ON DELETE RESTRICT,
-  metric         TEXT NOT NULL,
-  value          NUMERIC(12,4) NOT NULL,
+  stat_id          BIGSERIAL PRIMARY KEY,
+  game_id          BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
+  team_id          SMALLINT NOT NULL REFERENCES team(team_id) ON DELETE RESTRICT,
   
-  PRIMARY KEY (game_id, team_id, metric)
+  -- Offensive Stats
+  points           SMALLINT,
+  first_downs      SMALLINT,
+  total_yards      SMALLINT,
+  passing_yards    SMALLINT,
+  rushing_yards    SMALLINT,
+  turnovers        SMALLINT,
+  
+  -- Defensive Stats
+  sacks            NUMERIC(4,1),
+  interceptions    SMALLINT,
+  fumbles_recovered SMALLINT,
+  
+  -- Special Teams
+  punt_returns     SMALLINT,
+  kick_returns     SMALLINT,
+  
+  -- Metadata
+  source           TEXT DEFAULT 'manual',
+  pulled_at_utc    TIMESTAMPTZ DEFAULT NOW(),
+  
+  UNIQUE (game_id, team_id)
 );
 
-CREATE INDEX idx_team_game_stat_metric
-  ON team_game_stat(metric);
-
-CREATE INDEX idx_team_game_stat_team
-  ON team_game_stat(team_id);
+CREATE INDEX idx_team_game_stat_game ON team_game_stat(game_id);
+CREATE INDEX idx_team_game_stat_team ON team_game_stat(team_id);
 
 -- =========================================================
--- ADDITIONAL PERFORMANCE INDEXES
+-- GAME TEAM STATISTICS - DETAILED (Added 2024-12-22)
 -- =========================================================
 
--- Player indexes for search and filtering
-CREATE INDEX idx_player_full_name ON player(full_name);
-CREATE INDEX idx_player_team ON player(team_id);
-CREATE INDEX idx_player_position ON player(position);
-CREATE INDEX idx_player_external ON player(external_player_id);
+-- Detailed Team Statistics per Game (from API-Sports)
+CREATE TABLE game_team_statistics (
+  stat_id              BIGSERIAL PRIMARY KEY,
+  game_id              BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
+  team_id              SMALLINT NOT NULL REFERENCES team(team_id) ON DELETE RESTRICT,
+  
+  -- First Downs
+  first_downs_total           SMALLINT,
+  first_downs_passing         SMALLINT,
+  first_downs_rushing         SMALLINT,
+  first_downs_from_penalties  SMALLINT,
+  third_down_efficiency       TEXT,  -- e.g., "2-12"
+  fourth_down_efficiency      TEXT,  -- e.g., "0-0"
+  
+  -- Plays & Yards
+  plays_total                 SMALLINT,
+  yards_total                 SMALLINT,
+  yards_per_play              NUMERIC(4,1),
+  total_drives                NUMERIC(4,1),
+  
+  -- Passing
+  passing_yards               SMALLINT,
+  passing_comp_att            TEXT,  -- e.g., "15-26"
+  passing_yards_per_pass      NUMERIC(4,1),
+  passing_interceptions_thrown SMALLINT,
+  passing_sacks_yards_lost    TEXT,  -- e.g., "4-25"
+  
+  -- Rushing
+  rushing_yards               SMALLINT,
+  rushing_attempts            SMALLINT,
+  rushing_yards_per_rush      NUMERIC(4,1),
+  
+  -- Red Zone
+  red_zone_made_att           TEXT,  -- e.g., "0-1"
+  
+  -- Penalties
+  penalties_total             TEXT,  -- e.g., "9-72"
+  
+  -- Turnovers
+  turnovers_total             SMALLINT,
+  turnovers_lost_fumbles      SMALLINT,
+  turnovers_interceptions     SMALLINT,
+  
+  -- Possession
+  possession_total            TEXT,  -- e.g., "25:58"
+  
+  -- Defensive Stats
+  interceptions_total         SMALLINT,
+  fumbles_recovered_total     SMALLINT,
+  sacks_total                 SMALLINT,
+  safeties_total              SMALLINT,
+  int_touchdowns_total        SMALLINT,
+  points_against_total        SMALLINT,
+  
+  -- Metadata
+  source                      TEXT DEFAULT 'api-sports',
+  pulled_at_utc               TIMESTAMPTZ DEFAULT NOW(),
+  
+  CONSTRAINT uq_game_team_stat UNIQUE (game_id, team_id)
+);
 
--- Team indexes for search
-CREATE INDEX idx_team_name ON team(name);
-CREATE INDEX idx_team_abbrev ON team(abbrev);
-CREATE INDEX idx_team_external ON team(external_team_key);
+CREATE INDEX idx_game_team_stat_game ON game_team_statistics(game_id);
+CREATE INDEX idx_game_team_stat_team ON game_team_statistics(team_id);
+CREATE INDEX idx_game_team_stat_game_team ON game_team_statistics(game_id, team_id);
+CREATE INDEX idx_game_team_stat_pulled_at ON game_team_statistics(pulled_at_utc);
 
 -- =========================================================
--- COMMENTS (Documentation)
+-- GAME PLAYER STATISTICS - DETAILED (Added 2024-12-22)
 -- =========================================================
 
-COMMENT ON TABLE league IS 'Sports leagues (NFL)';
-COMMENT ON TABLE season IS 'Season years for each league';
-COMMENT ON TABLE team IS 'NFL teams with extended information including logos, coaches, and stadiums';
-COMMENT ON TABLE venue IS 'Stadiums where games are played';
-COMMENT ON TABLE player IS 'Complete player roster data with physical attributes and career info';
-COMMENT ON TABLE book IS 'Sportsbooks providing odds';
-COMMENT ON TABLE game IS 'Scheduled NFL games';
-COMMENT ON TABLE game_result IS 'Final scores and computed outcomes';
-COMMENT ON TABLE odds_line IS 'Time-series odds data from multiple sportsbooks';
-COMMENT ON TABLE injury_report IS 'Player injury status reports';
-COMMENT ON TABLE weather_observation IS 'Weather conditions at game time with severity scoring';
-COMMENT ON TABLE team_game_stat IS 'Flexible team performance metrics';
+-- Detailed Player Statistics per Game (from API-Sports)
+CREATE TABLE game_player_statistics (
+  stat_id              BIGSERIAL PRIMARY KEY,
+  game_id              BIGINT NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
+  player_id            BIGINT NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+  team_id              SMALLINT NOT NULL REFERENCES team(team_id) ON DELETE RESTRICT,
+  
+  -- Stat grouping (matches API groups)
+  stat_group           TEXT NOT NULL CHECK (stat_group IN (
+    'Passing', 'Rushing', 'Receiving', 'Defense',
+    'Fumbles', 'Interceptions', 'Kicking', 'Punting',
+    'Kick Returns', 'Punt Returns'
+  )),
+  
+  -- Flexible metric storage (key-value pairs)
+  metric_name          TEXT NOT NULL,
+  metric_value         TEXT,  -- Stores numbers, ratios (e.g., "6/12"), or NULL
+  
+  -- Metadata
+  source               TEXT DEFAULT 'api-sports',
+  pulled_at_utc        TIMESTAMPTZ DEFAULT NOW(),
+  
+  CONSTRAINT uq_game_player_stat UNIQUE (game_id, player_id, team_id, stat_group, metric_name)
+);
 
-COMMENT ON COLUMN team.external_team_key IS 'API sports team ID (1-32 for NFL)';
-COMMENT ON COLUMN team.logo_url IS 'URL to team logo image from API';
-COMMENT ON COLUMN team.coach IS 'Current head coach name';
-COMMENT ON COLUMN team.owner IS 'Team owner(s)';
-COMMENT ON COLUMN team.stadium IS 'Home stadium name';
-COMMENT ON COLUMN team.established IS 'Year team was established';
-
-COMMENT ON COLUMN player.external_player_id IS 'API sports player ID';
-COMMENT ON COLUMN player.player_group IS 'Position group: Offense, Defense, or Special Teams';
-COMMENT ON COLUMN player.image_url IS 'URL to player headshot from API';
-
-COMMENT ON COLUMN game.week IS 'Week number (0-25, including playoffs)';
-COMMENT ON COLUMN game.status IS 'Game status: scheduled, in_progress, final, postponed, canceled';
-COMMENT ON COLUMN game.external_game_key IS 'API sports game ID';
-
-COMMENT ON COLUMN game_result.home_win IS 'Generated: TRUE if home team won';
-COMMENT ON COLUMN game_result.total_points IS 'Generated: Sum of home and away scores';
-
-COMMENT ON COLUMN odds_line.market IS 'Bet type: spread, total, or moneyline';
-COMMENT ON COLUMN odds_line.side IS 'Bet side: home, away, over, under';
-COMMENT ON COLUMN odds_line.line_value IS 'Point spread or total line (NULL for moneyline)';
-COMMENT ON COLUMN odds_line.price_american IS 'American odds format (e.g., -110, +150)';
-COMMENT ON COLUMN odds_line.pulled_at_utc IS 'Timestamp when odds were captured';
-
-COMMENT ON COLUMN weather_observation.weather_severity_score IS 'Computed severity (0-100): 0=clear, 1-2=light, 3-4=moderate, 5+=severe';
-COMMENT ON COLUMN weather_observation.is_cold IS 'Temperature < 32°F';
-COMMENT ON COLUMN weather_observation.is_hot IS 'Temperature > 85°F';
-COMMENT ON COLUMN weather_observation.is_windy IS 'Wind > 15 mph';
-COMMENT ON COLUMN weather_observation.is_heavy_wind IS 'Wind > 25 mph';
+CREATE INDEX idx_game_player_stat_game ON game_player_statistics(game_id);
+CREATE INDEX idx_game_player_stat_player ON game_player_statistics(player_id);
+CREATE INDEX idx_game_player_stat_team ON game_player_statistics(team_id);
+CREATE INDEX idx_game_player_stat_game_player ON game_player_statistics(game_id, player_id);
+CREATE INDEX idx_game_player_stat_player_group ON game_player_statistics(player_id, stat_group);
+CREATE INDEX idx_game_player_stat_group ON game_player_statistics(stat_group);
+CREATE INDEX idx_game_player_stat_metric ON game_player_statistics(metric_name);
+CREATE INDEX idx_game_player_stat_pulled_at ON game_player_statistics(pulled_at_utc);
 
 -- =========================================================
 -- SAMPLE DATA (Optional - for development)
@@ -351,10 +403,10 @@ INSERT INTO book (name) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- =========================================================
--- PLAYER STATISTICS TABLES (Added 2024-12-22)
+-- PLAYER SEASON STATISTICS (Added 2024-12-22)
 -- =========================================================
 
--- Player Statistics (flexible key-value storage for any stat metric)
+-- Player Statistics (flexible key-value storage for season stats)
 CREATE TABLE player_statistic (
   statistic_id    BIGSERIAL PRIMARY KEY,
   player_id       BIGINT NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
@@ -375,11 +427,9 @@ CREATE TABLE player_statistic (
   source          TEXT DEFAULT 'api-sports',
   pulled_at_utc   TIMESTAMPTZ DEFAULT NOW(),
   
-  -- Unique constraint: one value per player/team/season/stat/metric combination
   CONSTRAINT uq_player_stat UNIQUE (player_id, team_id, season_id, stat_group, metric_name)
 );
 
--- Indexes for efficient querying
 CREATE INDEX idx_player_stat_player_season ON player_statistic(player_id, season_id);
 CREATE INDEX idx_player_stat_player_season_group ON player_statistic(player_id, season_id, stat_group);
 CREATE INDEX idx_player_stat_season ON player_statistic(season_id);
@@ -435,7 +485,6 @@ JOIN team t ON ps.team_id = t.team_id
 JOIN season s ON ps.season_id = s.season_id
 GROUP BY ps.player_id, p.full_name, p.position, p.player_group, s.year, t.name, t.abbrev;
 
--- Index on materialized view for fast queries
 CREATE UNIQUE INDEX idx_player_season_summary_unique ON player_season_summary(player_id, season_year);
 CREATE INDEX idx_player_season_summary_season ON player_season_summary(season_year);
 CREATE INDEX idx_player_season_summary_position ON player_season_summary(position);
@@ -448,13 +497,15 @@ COMMIT;
 /*
 
 DATABASE STATISTICS (updated 2024-12-22):
-- Tables: 13 (added player_statistic)
+- Tables: 15 (added game_team_statistics, game_player_statistics)
 - Materialized Views: 1 (player_season_summary)
-- Total Size: ~3.9 MB base + ~15-20 MB per season with stats
-- Largest Tables: 
+- Total Size: ~5 MB base + ~20-30 MB per season with all stats
+- Largest Tables (estimated per season): 
+  * game_player_statistics: ~100-200 MB per season (100,000-200,000 rows)
   * player_statistic: ~15-20 MB per season (85,000-120,000 rows)
   * odds_line: 1.5 MB (44,411 rows)
   * player: 1.3 MB (2,559 rows)
+  * game_team_statistics: ~500 KB per season (~544 rows)
   * team_game_stat: 552 KB
   * game: 136 KB (1,136 rows)
 
@@ -466,7 +517,9 @@ KEY RELATIONSHIPS:
 - player references: team (many:1)
 - injury_report references: game, team, player (many:1)
 - team_game_stat references: game, team (many:1)
-- player_statistic references: player, team, season (many:1) -- NEW
+- game_team_statistics references: game, team (many:1) -- NEW
+- game_player_statistics references: game, player, team (many:1) -- NEW
+- player_statistic references: player, team, season (many:1)
 
 GENERATED COLUMNS:
 - game_result.home_win: Computed from home_score > away_score
@@ -485,34 +538,66 @@ UNIQUE CONSTRAINTS:
 - odds_line(game_id, book_id, market, side, pulled_at_utc)
 - weather_observation(game_id, observed_at_utc)
 - injury_report(game_id, player_id, updated_at_utc)
-- player_statistic(player_id, team_id, season_id, stat_group, metric_name) -- NEW
+- game_team_statistics(game_id, team_id) -- NEW
+- game_player_statistics(game_id, player_id, team_id, stat_group, metric_name) -- NEW
+- player_statistic(player_id, team_id, season_id, stat_group, metric_name)
 
 ETL PIPELINES:
 - nfl_player_etl.py: Loads ~1,700 players per season (32 API requests)
 - nfl_team_etl.py: Loads 32 teams with logos (1 API request)
-- nfl_player_statistics_etl.py: Loads player stats (32 API requests per season) -- NEW
-  * Architecture: Class-based (ETLConfig, SportsAPIClient, PlayerStatisticsTransformer, 
-                  PlayerStatisticsDatabaseLoader, PlayerStatisticsETL)
-  * Optimization: Team-based fetching (1 call per team instead of 1 per player)
-  * Filters out Pro Bowl teams (AFC, NFC)
-  * Handles multi-team players (trades mid-season)
+- nfl_player_statistics_etl.py: Loads season player stats (32 API requests per season)
+  * Team-based fetching (1 call per team instead of 1 per player)
   * Refreshes materialized view automatically
+- nfl_game_team_statistics_etl.py: Loads team game stats (1 API call per game) -- NEW
+  * ~272 calls for full regular season
+  * Incremental mode only fetches missing games
+  * Stores 30+ detailed metrics per team per game
+- nfl_game_player_statistics_etl.py: Loads player game stats (1 API call per game) -- NEW
+  * ~272 calls for full regular season
+  * Flexible key-value schema for any stat type
+  * Supports 10 stat groups (Passing, Rushing, Receiving, Defense, etc.)
+  * ~100-200K records per full season
 
-PLAYER STATISTICS:
+STATISTICS COVERAGE:
+Season Stats (player_statistic):
 - Stat Groups: Passing, Rushing, Receiving, Defense, Kicking, Punting, Returning, Scoring
-- Flexible schema: metric_name/metric_value pairs (no schema changes for new metrics)
 - Season coverage: 2022+ (API limitation)
-- API efficiency: 32 calls for full season (vs ~1,700 player-by-player)
-- Materialized view: Pre-aggregated common stats for 10x faster queries
+- Materialized view for fast queries
+
+Game Team Stats (game_team_statistics):
+- Detailed per-game team performance
+- 30+ metrics including first downs, yards, turnovers, possession time
+- 2 records per game (home + away)
+
+Game Player Stats (game_player_statistics):
+- Individual player performance per game
+- Flexible schema supports any metric
+- 10 stat groups with dynamic metrics
+- ~50-80 players per game with stats
 
 FRONTEND INTEGRATION:
+Players:
 - Player search: /players/search?q={query}
 - Player detail: /players/{player_id}
-- Player statistics: /statistics/players/{player_id}/statistics?season={year} -- NEW
-- Statistical leaders: /statistics/leaders/{stat_group}/{metric}?season={year} -- NEW
-- Compare players: /statistics/compare?player_ids={ids}&season={year} -- NEW
+- Season stats: /statistics/players/{player_id}/statistics?season={year}
+- Game-by-game: /statistics/players/{player_id}/games?season={year} -- NEW
+- Player summary: /statistics/players/{player_id}/summary?season={year} -- NEW
+- Leaders: /statistics/players/leaders/{stat_group}/{metric}?season={year} -- NEW
+
+Teams:
 - Team search: /teams/search?q={query}
 - Team detail: /teams/{team_id}
 - Team roster: /teams/{team_id}/roster
+- Team game stats: /statistics/teams/{team_id}/games?season={year} -- NEW
+- Team leaders: /statistics/teams/leaders/{stat_category}?season={year} -- NEW
+
+Games:
+- Game team stats: /statistics/games/{game_id}/teams -- NEW
+- Game player stats: /statistics/games/{game_id}/players?stat_group={group} -- NEW
+
+VALIDATION SCRIPTS:
+- validate_game_stats.sql: Validates team game statistics
+- validate_game_player_stats.sql: Validates player game statistics
+- analyze_game_player_stats.sql: Comprehensive analysis with top performers
 
 */
