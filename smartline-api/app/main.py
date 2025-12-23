@@ -15,7 +15,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[                                 # ← List format
     "http://localhost:5173",
-    "https://*.vercel.app"
+    "https://smart-line-three.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
