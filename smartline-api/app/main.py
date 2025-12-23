@@ -4,7 +4,7 @@ from app.player_endpoints import router as player_router
 from app.team_endpoints import router as team_router
 from app.player_statistics_endpoints import router as player_statistics_router
 from app.game_team_statistics_endpoints import router as game_team_statistic_endpoints
-from app.game_player_statistics_endpoints import router as game_player_statistics_endpoints
+from app.game_player_statistics_endpoints_new import router as game_player_statistics_endpoints
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
