@@ -313,19 +313,23 @@ async def get_team_game_statistics(
             detail=f"Database error: {str(e)}"
         )
 
-# Add these new endpoints to game_team_statistics_endpoints.py
+"""
+CORRECTED Team Endpoints - Add as SEPARATE functions to your backend
+These are NEW endpoints, not modifications to existing ones!
+"""
+
+# ==================== ADD THESE AS NEW ENDPOINTS ====================
 
 @router.get(
     "/teams/leaders/points",
-    response_model=List[StatLeader],
     summary="Get Points Scored Leaders"
 )
-async def get_points_leaders(
+async def get_team_points_leaders(
     season: Optional[int] = Query(None, description="Filter by season"),
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    Get team leaders for points scored per game (calculated from game results).
+    NEW ENDPOINT - Get team leaders for points scored per game.
     """
     
     if season:
@@ -343,8 +347,8 @@ async def get_points_leaders(
                         WHEN g.away_team_id = t.team_id THEN g.away_score
                     END as team_score
                 FROM team t
-                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                JOIN season s ON g.season_id = s.season_id
+                INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
@@ -354,7 +358,7 @@ async def get_points_leaders(
                     team_id,
                     team_name,
                     team_abbrev,
-                    ROUND(AVG(team_score)::NUMERIC, 1) as avg_points
+                    ROUND(AVG(team_score), 1) as avg_points
                 FROM team_games
                 GROUP BY team_id, team_name, team_abbrev
             )
@@ -368,6 +372,7 @@ async def get_points_leaders(
                 avg_points::TEXT as stat_value,
                 '' as opponent
             FROM team_avg
+            WHERE avg_points IS NOT NULL
             ORDER BY avg_points DESC
             LIMIT %s
         """
@@ -379,15 +384,12 @@ async def get_points_leaders(
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    g.game_id,
-                    g.week,
-                    g.game_datetime_utc,
                     CASE 
                         WHEN g.home_team_id = t.team_id THEN g.home_score
                         WHEN g.away_team_id = t.team_id THEN g.away_score
                     END as team_score
                 FROM team t
-                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 WHERE g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
             ),
@@ -396,7 +398,7 @@ async def get_points_leaders(
                     team_id,
                     team_name,
                     team_abbrev,
-                    ROUND(AVG(team_score)::NUMERIC, 1) as avg_points
+                    ROUND(AVG(team_score), 1) as avg_points
                 FROM team_games
                 GROUP BY team_id, team_name, team_abbrev
             )
@@ -410,6 +412,7 @@ async def get_points_leaders(
                 avg_points::TEXT as stat_value,
                 '' as opponent
             FROM team_avg
+            WHERE avg_points IS NOT NULL
             ORDER BY avg_points DESC
             LIMIT %s
         """
@@ -424,7 +427,7 @@ async def get_points_leaders(
                 columns = [desc[0] for desc in cur.description]
                 leaders = [dict(zip(columns, row)) for row in rows]
                 
-                return [StatLeader(**leader) for leader in leaders]
+                return leaders
                 
     except psycopg2.Error as e:
         raise HTTPException(
@@ -435,15 +438,14 @@ async def get_points_leaders(
 
 @router.get(
     "/teams/leaders/points_allowed",
-    response_model=List[StatLeader],
     summary="Get Points Allowed Leaders"
 )
-async def get_points_allowed_leaders(
+async def get_team_points_allowed_leaders(
     season: Optional[int] = Query(None, description="Filter by season"),
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    Get team leaders for points allowed per game (best defense = lowest).
+    NEW ENDPOINT - Get team leaders for points allowed (best defense).
     """
     
     if season:
@@ -461,8 +463,8 @@ async def get_points_allowed_leaders(
                         WHEN g.away_team_id = t.team_id THEN g.home_score
                     END as points_allowed
                 FROM team t
-                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                JOIN season s ON g.season_id = s.season_id
+                INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
@@ -472,7 +474,7 @@ async def get_points_allowed_leaders(
                     team_id,
                     team_name,
                     team_abbrev,
-                    ROUND(AVG(points_allowed)::NUMERIC, 1) as avg_points_allowed
+                    ROUND(AVG(points_allowed), 1) as avg_points_allowed
                 FROM team_games
                 GROUP BY team_id, team_name, team_abbrev
             )
@@ -486,6 +488,7 @@ async def get_points_allowed_leaders(
                 avg_points_allowed::TEXT as stat_value,
                 '' as opponent
             FROM team_avg
+            WHERE avg_points_allowed IS NOT NULL
             ORDER BY avg_points_allowed ASC
             LIMIT %s
         """
@@ -497,15 +500,12 @@ async def get_points_allowed_leaders(
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    g.game_id,
-                    g.week,
-                    g.game_datetime_utc,
                     CASE 
                         WHEN g.home_team_id = t.team_id THEN g.away_score
                         WHEN g.away_team_id = t.team_id THEN g.home_score
                     END as points_allowed
                 FROM team t
-                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 WHERE g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
             ),
@@ -514,7 +514,7 @@ async def get_points_allowed_leaders(
                     team_id,
                     team_name,
                     team_abbrev,
-                    ROUND(AVG(points_allowed)::NUMERIC, 1) as avg_points_allowed
+                    ROUND(AVG(points_allowed), 1) as avg_points_allowed
                 FROM team_games
                 GROUP BY team_id, team_name, team_abbrev
             )
@@ -528,6 +528,7 @@ async def get_points_allowed_leaders(
                 avg_points_allowed::TEXT as stat_value,
                 '' as opponent
             FROM team_avg
+            WHERE avg_points_allowed IS NOT NULL
             ORDER BY avg_points_allowed ASC
             LIMIT %s
         """
@@ -542,71 +543,13 @@ async def get_points_allowed_leaders(
                 columns = [desc[0] for desc in cur.description]
                 leaders = [dict(zip(columns, row)) for row in rows]
                 
-                return [StatLeader(**leader) for leader in leaders]
+                return leaders
                 
     except psycopg2.Error as e:
         raise HTTPException(
             status_code=500,
             detail=f"Database error: {str(e)}"
         )
-
-
-# Helper function to determine conference and division from team abbreviation
-def get_team_conference_division(team_abbrev: str) -> tuple:
-    """Returns (conference, division) for a team based on their abbreviation."""
-    
-    # NFL Conference and Division mapping
-    team_mapping = {
-        # AFC East
-        'BUF': ('AFC', 'AFC East'),
-        'MIA': ('AFC', 'AFC East'),
-        'NE': ('AFC', 'AFC East'),
-        'NYJ': ('AFC', 'AFC East'),
-        
-        # AFC North
-        'BAL': ('AFC', 'AFC North'),
-        'CIN': ('AFC', 'AFC North'),
-        'CLE': ('AFC', 'AFC North'),
-        'PIT': ('AFC', 'AFC North'),
-        
-        # AFC South
-        'HOU': ('AFC', 'AFC South'),
-        'IND': ('AFC', 'AFC South'),
-        'JAX': ('AFC', 'AFC South'),
-        'TEN': ('AFC', 'AFC South'),
-        
-        # AFC West
-        'DEN': ('AFC', 'AFC West'),
-        'KC': ('AFC', 'AFC West'),
-        'LV': ('AFC', 'AFC West'),
-        'LAC': ('AFC', 'AFC West'),
-        
-        # NFC East
-        'DAL': ('NFC', 'NFC East'),
-        'NYG': ('NFC', 'NFC East'),
-        'PHI': ('NFC', 'NFC East'),
-        'WAS': ('NFC', 'NFC East'),
-        
-        # NFC North
-        'CHI': ('NFC', 'NFC North'),
-        'DET': ('NFC', 'NFC North'),
-        'GB': ('NFC', 'NFC North'),
-        'MIN': ('NFC', 'NFC North'),
-        
-        # NFC South
-        'ATL': ('NFC', 'NFC South'),
-        'CAR': ('NFC', 'NFC South'),
-        'NO': ('NFC', 'NFC South'),
-        'TB': ('NFC', 'NFC South'),
-        
-        # NFC West
-        'ARI': ('NFC', 'NFC West'),
-        'LAR': ('NFC', 'NFC West'),
-        'SF': ('NFC', 'NFC West'),
-        'SEA': ('NFC', 'NFC West'),
-    }
-    
-    return team_mapping.get(team_abbrev, ('Unknown', 'Unknown'))
 
 @router.get(
     "/teams/leaders/{stat_category}",
@@ -715,23 +658,48 @@ async def get_stat_leaders(
             detail=f"Database error: {str(e)}"
         )
 
+# NFL Division mapping helper
+def get_team_conference_division(team_abbrev: str) -> tuple:
+    """Returns (conference, division) for a team."""
+    
+    team_mapping = {
+        'BUF': ('AFC', 'AFC East'), 'MIA': ('AFC', 'AFC East'),
+        'NE': ('AFC', 'AFC East'), 'NYJ': ('AFC', 'AFC East'),
+        'BAL': ('AFC', 'AFC North'), 'CIN': ('AFC', 'AFC North'),
+        'CLE': ('AFC', 'AFC North'), 'PIT': ('AFC', 'AFC North'),
+        'HOU': ('AFC', 'AFC South'), 'IND': ('AFC', 'AFC South'),
+        'JAX': ('AFC', 'AFC South'), 'TEN': ('AFC', 'AFC South'),
+        'DEN': ('AFC', 'AFC West'), 'KC': ('AFC', 'AFC West'),
+        'LV': ('AFC', 'AFC West'), 'LAC': ('AFC', 'AFC West'),
+        'DAL': ('NFC', 'NFC East'), 'NYG': ('NFC', 'NFC East'),
+        'PHI': ('NFC', 'NFC East'), 'WAS': ('NFC', 'NFC East'),
+        'CHI': ('NFC', 'NFC North'), 'DET': ('NFC', 'NFC North'),
+        'GB': ('NFC', 'NFC North'), 'MIN': ('NFC', 'NFC North'),
+        'ATL': ('NFC', 'NFC South'), 'CAR': ('NFC', 'NFC South'),
+        'NO': ('NFC', 'NFC South'), 'TB': ('NFC', 'NFC South'),
+        'ARI': ('NFC', 'NFC West'), 'LAR': ('NFC', 'NFC West'),
+        'SF': ('NFC', 'NFC West'), 'SEA': ('NFC', 'NFC West'),
+    }
+    
+    return team_mapping.get(team_abbrev, ('Unknown', 'Unknown'))
+
+
 @router.get(
     "/teams/{team_id}/standings",
-    summary="Get Team Standings Info"
+    summary="Get Team Conference and Division Rankings"
 )
 async def get_team_standings(
     team_id: int = Path(..., description="Team ID"),
     season: int = Query(..., description="Season year")
 ):
     """
-    Get team's conference rank and division rank for a season.
-    Returns the team's position in their conference and division based on win percentage.
+    NEW ENDPOINT - Get team's conference and division rankings.
     """
     
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # First get the team info
+                # Get team info
                 cur.execute(
                     "SELECT name, abbrev FROM team WHERE team_id = %s",
                     (team_id,)
@@ -741,44 +709,33 @@ async def get_team_standings(
                 if not team_row:
                     raise HTTPException(status_code=404, detail="Team not found")
                 
-                team_name = team_row[0]
-                team_abbrev = team_row[1]
-                
+                team_name, team_abbrev = team_row
                 conference, division = get_team_conference_division(team_abbrev)
                 
-                # Calculate standings for all teams in the season
-                standings_query = """
+                # FIXED QUERY - Use INNER JOIN and proper column names
+                query = """
                     WITH team_records AS (
                         SELECT 
                             t.team_id,
                             t.name,
                             t.abbrev,
-                            COUNT(DISTINCT g.game_id) as games_played,
-                            SUM(
-                                CASE 
-                                    WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) THEN 1
-                                    WHEN (g.away_team_id = t.team_id AND g.away_score > g.home_score) THEN 1
-                                    ELSE 0
-                                END
-                            ) as wins,
-                            SUM(
-                                CASE 
-                                    WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) THEN 1
-                                    WHEN (g.away_team_id = t.team_id AND g.away_score < g.home_score) THEN 1
-                                    ELSE 0
-                                END
-                            ) as losses,
-                            SUM(
-                                CASE 
-                                    WHEN (g.home_team_id = t.team_id OR g.away_team_id = t.team_id) 
-                                         AND g.home_score = g.away_score
-                                    THEN 1
-                                    ELSE 0
-                                END
-                            ) as ties
+                            COUNT(g.game_id) as games_played,
+                            SUM(CASE 
+                                WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) OR
+                                     (g.away_team_id = t.team_id AND g.away_score > g.home_score)
+                                THEN 1 ELSE 0 
+                            END) as wins,
+                            SUM(CASE 
+                                WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) OR
+                                     (g.away_team_id = t.team_id AND g.away_score < g.home_score)
+                                THEN 1 ELSE 0 
+                            END) as losses,
+                            SUM(CASE 
+                                WHEN g.home_score = g.away_score THEN 1 ELSE 0 
+                            END) as ties
                         FROM team t
-                        JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
-                        JOIN season s ON g.season_id = s.season_id
+                        INNER JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                        INNER JOIN season s ON g.season_id = s.season_id
                         WHERE s.year = %s
                           AND g.home_score IS NOT NULL
                           AND g.away_score IS NOT NULL
@@ -793,21 +750,18 @@ async def get_team_standings(
                         ties,
                         games_played,
                         CASE 
-                            WHEN games_played > 0 THEN
-                                ROUND((wins::NUMERIC + ties::NUMERIC * 0.5) / games_played::NUMERIC, 3)
-                            ELSE 0
+                            WHEN games_played > 0 
+                            THEN (wins + ties * 0.5) / games_played 
+                            ELSE 0 
                         END as win_pct
                     FROM team_records
                     ORDER BY win_pct DESC, wins DESC
                 """
                 
-                cur.execute(standings_query, (season,))
+                cur.execute(query, (season,))
                 all_standings = cur.fetchall()
                 
-                # Calculate conference and division ranks
-                conference_rank = None
-                division_rank = None
-                
+                # Calculate ranks
                 conference_teams = []
                 division_teams = []
                 
@@ -815,33 +769,18 @@ async def get_team_standings(
                     tid, name, abbrev, wins, losses, ties, gp, win_pct = row
                     team_conf, team_div = get_team_conference_division(abbrev)
                     
-                    # Add to conference list
                     if team_conf == conference:
-                        conference_teams.append({
-                            'team_id': tid,
-                            'win_pct': float(win_pct) if win_pct else 0
-                        })
+                        conference_teams.append((tid, float(win_pct or 0)))
                     
-                    # Add to division list
                     if team_div == division:
-                        division_teams.append({
-                            'team_id': tid,
-                            'win_pct': float(win_pct) if win_pct else 0
-                        })
+                        division_teams.append((tid, float(win_pct or 0)))
                 
                 # Sort and find ranks
-                conference_teams.sort(key=lambda x: x['win_pct'], reverse=True)
-                division_teams.sort(key=lambda x: x['win_pct'], reverse=True)
+                conference_teams.sort(key=lambda x: x[1], reverse=True)
+                division_teams.sort(key=lambda x: x[1], reverse=True)
                 
-                for idx, team in enumerate(conference_teams):
-                    if team['team_id'] == team_id:
-                        conference_rank = idx + 1
-                        break
-                
-                for idx, team in enumerate(division_teams):
-                    if team['team_id'] == team_id:
-                        division_rank = idx + 1
-                        break
+                conference_rank = next((i + 1 for i, (tid, _) in enumerate(conference_teams) if tid == team_id), None)
+                division_rank = next((i + 1 for i, (tid, _) in enumerate(division_teams) if tid == team_id), None)
                 
                 return {
                     "team_id": team_id,
@@ -862,25 +801,14 @@ async def get_team_standings(
             detail=f"Database error: {str(e)}"
         )
 
-# =========================================================
-# Health Check
-# =========================================================
 
-@router.get("/games/stats/health", summary="Health Check")
-async def health_check():
-    """Check if the game statistics endpoints are operational."""
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM game_team_statistics")
-                count = cur.fetchone()[0]
-                
-                return {
-                    "status": "healthy",
-                    "total_stat_records": count
-                }
-    except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Service unhealthy: {str(e)}"
-        )
+
+
+
+
+
+
+
+
+
+
