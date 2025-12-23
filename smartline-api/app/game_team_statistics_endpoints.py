@@ -433,41 +433,38 @@ async def get_points_leaders(
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    Get team leaders for points scored (calculated from game results).
-    This aggregates team_score from the games table.
+    Get team leaders for points scored per game (calculated from game results).
     """
     
     if season:
         query = """
-            WITH team_points AS (
+            WITH team_games AS (
                 SELECT 
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    SUM(
-                        CASE 
-                            WHEN g.home_team_id = t.team_id THEN g.home_score
-                            WHEN g.away_team_id = t.team_id THEN g.away_score
-                            ELSE 0
-                        END
-                    ) as total_points,
-                    COUNT(DISTINCT g.game_id) as games_played,
-                    ROUND(
-                        SUM(
-                            CASE 
-                                WHEN g.home_team_id = t.team_id THEN g.home_score
-                                WHEN g.away_team_id = t.team_id THEN g.away_score
-                                ELSE 0
-                            END
-                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
-                    ) as points_per_game
+                    g.game_id,
+                    g.week,
+                    g.game_datetime_utc,
+                    CASE 
+                        WHEN g.home_team_id = t.team_id THEN g.home_score
+                        WHEN g.away_team_id = t.team_id THEN g.away_score
+                    END as team_score
                 FROM team t
                 JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
-                GROUP BY t.team_id, t.name, t.abbrev
+            ),
+            team_avg AS (
+                SELECT 
+                    team_id,
+                    team_name,
+                    team_abbrev,
+                    ROUND(AVG(team_score)::NUMERIC, 1) as avg_points
+                FROM team_games
+                GROUP BY team_id, team_name, team_abbrev
             )
             SELECT 
                 team_id,
@@ -476,42 +473,40 @@ async def get_points_leaders(
                 0 as game_id,
                 0 as week,
                 NOW() as game_date,
-                points_per_game::TEXT as stat_value,
+                avg_points::TEXT as stat_value,
                 '' as opponent
-            FROM team_points
-            ORDER BY points_per_game DESC
+            FROM team_avg
+            ORDER BY avg_points DESC
             LIMIT %s
         """
-        params = [season, limit]
+        params = (season, limit)
     else:
         query = """
-            WITH team_points AS (
+            WITH team_games AS (
                 SELECT 
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    SUM(
-                        CASE 
-                            WHEN g.home_team_id = t.team_id THEN g.home_score
-                            WHEN g.away_team_id = t.team_id THEN g.away_score
-                            ELSE 0
-                        END
-                    ) as total_points,
-                    COUNT(DISTINCT g.game_id) as games_played,
-                    ROUND(
-                        SUM(
-                            CASE 
-                                WHEN g.home_team_id = t.team_id THEN g.home_score
-                                WHEN g.away_team_id = t.team_id THEN g.away_score
-                                ELSE 0
-                            END
-                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
-                    ) as points_per_game
+                    g.game_id,
+                    g.week,
+                    g.game_datetime_utc,
+                    CASE 
+                        WHEN g.home_team_id = t.team_id THEN g.home_score
+                        WHEN g.away_team_id = t.team_id THEN g.away_score
+                    END as team_score
                 FROM team t
                 JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 WHERE g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
-                GROUP BY t.team_id, t.name, t.abbrev
+            ),
+            team_avg AS (
+                SELECT 
+                    team_id,
+                    team_name,
+                    team_abbrev,
+                    ROUND(AVG(team_score)::NUMERIC, 1) as avg_points
+                FROM team_games
+                GROUP BY team_id, team_name, team_abbrev
             )
             SELECT 
                 team_id,
@@ -520,18 +515,18 @@ async def get_points_leaders(
                 0 as game_id,
                 0 as week,
                 NOW() as game_date,
-                points_per_game::TEXT as stat_value,
+                avg_points::TEXT as stat_value,
                 '' as opponent
-            FROM team_points
-            ORDER BY points_per_game DESC
+            FROM team_avg
+            ORDER BY avg_points DESC
             LIMIT %s
         """
-        params = [limit]
+        params = (limit,)
     
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, tuple(params))
+                cur.execute(query, params)
                 rows = cur.fetchall()
                 
                 columns = [desc[0] for desc in cur.description]
@@ -556,41 +551,38 @@ async def get_points_allowed_leaders(
     limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
 ):
     """
-    Get team leaders for points allowed (calculated from game results).
-    Lower is better (best defenses).
+    Get team leaders for points allowed per game (best defense = lowest).
     """
     
     if season:
         query = """
-            WITH team_points_allowed AS (
+            WITH team_games AS (
                 SELECT 
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    SUM(
-                        CASE 
-                            WHEN g.home_team_id = t.team_id THEN g.away_score
-                            WHEN g.away_team_id = t.team_id THEN g.home_score
-                            ELSE 0
-                        END
-                    ) as total_points_allowed,
-                    COUNT(DISTINCT g.game_id) as games_played,
-                    ROUND(
-                        SUM(
-                            CASE 
-                                WHEN g.home_team_id = t.team_id THEN g.away_score
-                                WHEN g.away_team_id = t.team_id THEN g.home_score
-                                ELSE 0
-                            END
-                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
-                    ) as points_allowed_per_game
+                    g.game_id,
+                    g.week,
+                    g.game_datetime_utc,
+                    CASE 
+                        WHEN g.home_team_id = t.team_id THEN g.away_score
+                        WHEN g.away_team_id = t.team_id THEN g.home_score
+                    END as points_allowed
                 FROM team t
                 JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 JOIN season s ON g.season_id = s.season_id
                 WHERE s.year = %s
                   AND g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
-                GROUP BY t.team_id, t.name, t.abbrev
+            ),
+            team_avg AS (
+                SELECT 
+                    team_id,
+                    team_name,
+                    team_abbrev,
+                    ROUND(AVG(points_allowed)::NUMERIC, 1) as avg_points_allowed
+                FROM team_games
+                GROUP BY team_id, team_name, team_abbrev
             )
             SELECT 
                 team_id,
@@ -599,42 +591,40 @@ async def get_points_allowed_leaders(
                 0 as game_id,
                 0 as week,
                 NOW() as game_date,
-                points_allowed_per_game::TEXT as stat_value,
+                avg_points_allowed::TEXT as stat_value,
                 '' as opponent
-            FROM team_points_allowed
-            ORDER BY points_allowed_per_game ASC
+            FROM team_avg
+            ORDER BY avg_points_allowed ASC
             LIMIT %s
         """
-        params = [season, limit]
+        params = (season, limit)
     else:
         query = """
-            WITH team_points_allowed AS (
+            WITH team_games AS (
                 SELECT 
                     t.team_id,
                     t.name as team_name,
                     t.abbrev as team_abbrev,
-                    SUM(
-                        CASE 
-                            WHEN g.home_team_id = t.team_id THEN g.away_score
-                            WHEN g.away_team_id = t.team_id THEN g.home_score
-                            ELSE 0
-                        END
-                    ) as total_points_allowed,
-                    COUNT(DISTINCT g.game_id) as games_played,
-                    ROUND(
-                        SUM(
-                            CASE 
-                                WHEN g.home_team_id = t.team_id THEN g.away_score
-                                WHEN g.away_team_id = t.team_id THEN g.home_score
-                                ELSE 0
-                            END
-                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
-                    ) as points_allowed_per_game
+                    g.game_id,
+                    g.week,
+                    g.game_datetime_utc,
+                    CASE 
+                        WHEN g.home_team_id = t.team_id THEN g.away_score
+                        WHEN g.away_team_id = t.team_id THEN g.home_score
+                    END as points_allowed
                 FROM team t
                 JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
                 WHERE g.home_score IS NOT NULL
                   AND g.away_score IS NOT NULL
-                GROUP BY t.team_id, t.name, t.abbrev
+            ),
+            team_avg AS (
+                SELECT 
+                    team_id,
+                    team_name,
+                    team_abbrev,
+                    ROUND(AVG(points_allowed)::NUMERIC, 1) as avg_points_allowed
+                FROM team_games
+                GROUP BY team_id, team_name, team_abbrev
             )
             SELECT 
                 team_id,
@@ -643,18 +633,18 @@ async def get_points_allowed_leaders(
                 0 as game_id,
                 0 as week,
                 NOW() as game_date,
-                points_allowed_per_game::TEXT as stat_value,
+                avg_points_allowed::TEXT as stat_value,
                 '' as opponent
-            FROM team_points_allowed
-            ORDER BY points_allowed_per_game ASC
+            FROM team_avg
+            ORDER BY avg_points_allowed ASC
             LIMIT %s
         """
-        params = [limit]
+        params = (limit,)
     
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, tuple(params))
+                cur.execute(query, params)
                 rows = cur.fetchall()
                 
                 columns = [desc[0] for desc in cur.description]
@@ -768,22 +758,24 @@ async def get_team_standings(
                             COUNT(DISTINCT g.game_id) as games_played,
                             SUM(
                                 CASE 
-                                    WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) OR
-                                         (g.away_team_id = t.team_id AND g.away_score > g.home_score)
-                                    THEN 1 ELSE 0
+                                    WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) THEN 1
+                                    WHEN (g.away_team_id = t.team_id AND g.away_score > g.home_score) THEN 1
+                                    ELSE 0
                                 END
                             ) as wins,
                             SUM(
                                 CASE 
-                                    WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) OR
-                                         (g.away_team_id = t.team_id AND g.away_score < g.home_score)
-                                    THEN 1 ELSE 0
+                                    WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) THEN 1
+                                    WHEN (g.away_team_id = t.team_id AND g.away_score < g.home_score) THEN 1
+                                    ELSE 0
                                 END
                             ) as losses,
                             SUM(
                                 CASE 
-                                    WHEN g.home_score = g.away_score
-                                    THEN 1 ELSE 0
+                                    WHEN (g.home_team_id = t.team_id OR g.away_team_id = t.team_id) 
+                                         AND g.home_score = g.away_score
+                                    THEN 1
+                                    ELSE 0
                                 END
                             ) as ties
                         FROM team t
@@ -802,7 +794,11 @@ async def get_team_standings(
                         losses,
                         ties,
                         games_played,
-                        ROUND((wins::NUMERIC + ties::NUMERIC * 0.5) / NULLIF(games_played, 0), 3) as win_pct
+                        CASE 
+                            WHEN games_played > 0 THEN
+                                ROUND((wins::NUMERIC + ties::NUMERIC * 0.5) / games_played::NUMERIC, 3)
+                            ELSE 0
+                        END as win_pct
                     FROM team_records
                     ORDER BY win_pct DESC, wins DESC
                 """
@@ -817,19 +813,37 @@ async def get_team_standings(
                 conference_teams = []
                 division_teams = []
                 
-                for idx, row in enumerate(all_standings):
+                for row in all_standings:
                     tid, name, abbrev, wins, losses, ties, gp, win_pct = row
                     team_conf, team_div = get_team_conference_division(abbrev)
                     
+                    # Add to conference list
                     if team_conf == conference:
-                        conference_teams.append((tid, win_pct))
-                        if tid == team_id:
-                            conference_rank = len(conference_teams)
+                        conference_teams.append({
+                            'team_id': tid,
+                            'win_pct': float(win_pct) if win_pct else 0
+                        })
                     
+                    # Add to division list
                     if team_div == division:
-                        division_teams.append((tid, win_pct))
-                        if tid == team_id:
-                            division_rank = len(division_teams)
+                        division_teams.append({
+                            'team_id': tid,
+                            'win_pct': float(win_pct) if win_pct else 0
+                        })
+                
+                # Sort and find ranks
+                conference_teams.sort(key=lambda x: x['win_pct'], reverse=True)
+                division_teams.sort(key=lambda x: x['win_pct'], reverse=True)
+                
+                for idx, team in enumerate(conference_teams):
+                    if team['team_id'] == team_id:
+                        conference_rank = idx + 1
+                        break
+                
+                for idx, team in enumerate(division_teams):
+                    if team['team_id'] == team_id:
+                        division_rank = idx + 1
+                        break
                 
                 return {
                     "team_id": team_id,
