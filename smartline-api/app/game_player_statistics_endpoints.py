@@ -203,7 +203,7 @@ async def get_player_game_statistics(
         None,
         description="Filter by stat group (Passing, Rushing, etc.)"
     ),
-    limit: int = Query(20, ge=1, le=100, description="Maximum games to return")
+    limit: int = Query(20, description="Maximum games to return")
 ):
     """
     Get game-by-game statistics for a specific player.
