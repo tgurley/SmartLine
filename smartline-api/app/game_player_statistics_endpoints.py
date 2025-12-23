@@ -211,38 +211,45 @@ async def get_player_game_statistics(
     Optionally filter by season and/or stat group.
     """
     query = """
-        SELECT 
+        WITH recent_games AS (
+            SELECT DISTINCT g.game_id
+            FROM game_player_statistics gps
+            JOIN game g ON gps.game_id = g.game_id
+            JOIN season s ON g.season_id = s.season_id
+            WHERE gps.player_id = %s
+            AND s.year = %s
+            ORDER BY g.game_datetime_utc DESC
+            LIMIT %s
+        )
+        SELECT
             gps.game_id,
             g.week,
             g.game_datetime_utc,
-            s.year as season,
+            s.year AS season,
             gps.stat_group,
             gps.metric_name,
             gps.metric_value,
-            t.name as team_name,
-            t.abbrev as team_abbrev,
-            CASE 
+            t.name AS team_name,
+            t.abbrev AS team_abbrev,
+            CASE
                 WHEN gps.team_id = g.home_team_id THEN at.name
                 ELSE ht.name
-            END as opponent_name,
-            CASE 
+            END AS opponent_name,
+            CASE
                 WHEN gps.team_id = g.home_team_id THEN at.abbrev
                 ELSE ht.abbrev
-            END as opponent_abbrev,
-            p.full_name as player_name,
+            END AS opponent_abbrev,
+            p.full_name AS player_name,
             p.position
         FROM game_player_statistics gps
+        JOIN recent_games rg ON gps.game_id = rg.game_id
         JOIN game g ON gps.game_id = g.game_id
         JOIN season s ON g.season_id = s.season_id
         JOIN player p ON gps.player_id = p.player_id
         JOIN team t ON gps.team_id = t.team_id
         JOIN team ht ON g.home_team_id = ht.team_id
         JOIN team at ON g.away_team_id = at.team_id
-        WHERE gps.player_id = %s
-        {season_filter}
-        {stat_group_filter}
-        ORDER BY g.game_datetime_utc DESC
-        LIMIT %s
+        ORDER BY g.game_datetime_utc DESC;
     """
     
     params = [player_id]
@@ -352,45 +359,27 @@ async def get_player_stat_leaders(
     # Note: This query assumes numeric values. For ratio values like "6/12",
     # we'll need to handle them differently or convert them.
     query = """
-        WITH recent_games AS (
-            SELECT DISTINCT g.game_id
-            FROM game_player_statistics gps
-            JOIN game g ON gps.game_id = g.game_id
-            JOIN season s ON g.season_id = s.season_id
-            WHERE gps.player_id = %s
-            AND s.year = %s
-            ORDER BY g.game_datetime_utc DESC
-            LIMIT %s
-        )
-        SELECT
+        SELECT 
+            gps.player_id,
+            p.full_name as player_name,
+            p.position,
+            t.name as team_name,
+            t.abbrev as team_abbrev,
             gps.game_id,
             g.week,
-            g.game_datetime_utc,
-            s.year AS season,
-            gps.stat_group,
-            gps.metric_name,
-            gps.metric_value,
-            t.name AS team_name,
-            t.abbrev AS team_abbrev,
-            CASE
-                WHEN gps.team_id = g.home_team_id THEN at.name
-                ELSE ht.name
-            END AS opponent_name,
-            CASE
-                WHEN gps.team_id = g.home_team_id THEN at.abbrev
-                ELSE ht.abbrev
-            END AS opponent_abbrev,
-            p.full_name AS player_name,
-            p.position
+            g.game_datetime_utc as game_date,
+            gps.metric_value
         FROM game_player_statistics gps
-        JOIN recent_games rg ON gps.game_id = rg.game_id
-        JOIN game g ON gps.game_id = g.game_id
-        JOIN season s ON g.season_id = s.season_id
         JOIN player p ON gps.player_id = p.player_id
         JOIN team t ON gps.team_id = t.team_id
-        JOIN team ht ON g.home_team_id = ht.team_id
-        JOIN team at ON g.away_team_id = at.team_id
-        ORDER BY g.game_datetime_utc DESC;
+        JOIN game g ON gps.game_id = g.game_id
+        {season_filter}
+        WHERE gps.stat_group = %s
+          AND gps.metric_name = %s
+          AND gps.metric_value IS NOT NULL
+          AND gps.metric_value ~ '^[0-9]+(\.[0-9]+)?$'  -- Only numeric values
+        ORDER BY CAST(gps.metric_value AS NUMERIC) DESC
+        LIMIT %s
     """
     
     params = []
