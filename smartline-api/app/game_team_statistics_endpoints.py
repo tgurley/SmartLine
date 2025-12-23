@@ -421,6 +421,434 @@ async def get_stat_leaders(
             detail=f"Database error: {str(e)}"
         )
 
+# Add these new endpoints to game_team_statistics_endpoints.py
+
+@router.get(
+    "/teams/leaders/points",
+    response_model=List[StatLeader],
+    summary="Get Points Scored Leaders"
+)
+async def get_points_leaders(
+    season: Optional[int] = Query(None, description="Filter by season"),
+    limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
+):
+    """
+    Get team leaders for points scored (calculated from game results).
+    This aggregates team_score from the games table.
+    """
+    
+    if season:
+        query = """
+            WITH team_points AS (
+                SELECT 
+                    t.team_id,
+                    t.name as team_name,
+                    t.abbrev as team_abbrev,
+                    SUM(
+                        CASE 
+                            WHEN g.home_team_id = t.team_id THEN g.home_score
+                            WHEN g.away_team_id = t.team_id THEN g.away_score
+                            ELSE 0
+                        END
+                    ) as total_points,
+                    COUNT(DISTINCT g.game_id) as games_played,
+                    ROUND(
+                        SUM(
+                            CASE 
+                                WHEN g.home_team_id = t.team_id THEN g.home_score
+                                WHEN g.away_team_id = t.team_id THEN g.away_score
+                                ELSE 0
+                            END
+                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
+                    ) as points_per_game
+                FROM team t
+                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                JOIN season s ON g.season_id = s.season_id
+                WHERE s.year = %s
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                GROUP BY t.team_id, t.name, t.abbrev
+            )
+            SELECT 
+                team_id,
+                team_name,
+                team_abbrev,
+                0 as game_id,
+                0 as week,
+                NOW() as game_date,
+                points_per_game::TEXT as stat_value,
+                '' as opponent
+            FROM team_points
+            ORDER BY points_per_game DESC
+            LIMIT %s
+        """
+        params = [season, limit]
+    else:
+        query = """
+            WITH team_points AS (
+                SELECT 
+                    t.team_id,
+                    t.name as team_name,
+                    t.abbrev as team_abbrev,
+                    SUM(
+                        CASE 
+                            WHEN g.home_team_id = t.team_id THEN g.home_score
+                            WHEN g.away_team_id = t.team_id THEN g.away_score
+                            ELSE 0
+                        END
+                    ) as total_points,
+                    COUNT(DISTINCT g.game_id) as games_played,
+                    ROUND(
+                        SUM(
+                            CASE 
+                                WHEN g.home_team_id = t.team_id THEN g.home_score
+                                WHEN g.away_team_id = t.team_id THEN g.away_score
+                                ELSE 0
+                            END
+                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
+                    ) as points_per_game
+                FROM team t
+                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                WHERE g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                GROUP BY t.team_id, t.name, t.abbrev
+            )
+            SELECT 
+                team_id,
+                team_name,
+                team_abbrev,
+                0 as game_id,
+                0 as week,
+                NOW() as game_date,
+                points_per_game::TEXT as stat_value,
+                '' as opponent
+            FROM team_points
+            ORDER BY points_per_game DESC
+            LIMIT %s
+        """
+        params = [limit]
+    
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+                
+                columns = [desc[0] for desc in cur.description]
+                leaders = [dict(zip(columns, row)) for row in rows]
+                
+                return [StatLeader(**leader) for leader in leaders]
+                
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+@router.get(
+    "/teams/leaders/points_allowed",
+    response_model=List[StatLeader],
+    summary="Get Points Allowed Leaders"
+)
+async def get_points_allowed_leaders(
+    season: Optional[int] = Query(None, description="Filter by season"),
+    limit: int = Query(10, ge=1, le=50, description="Number of leaders to return")
+):
+    """
+    Get team leaders for points allowed (calculated from game results).
+    Lower is better (best defenses).
+    """
+    
+    if season:
+        query = """
+            WITH team_points_allowed AS (
+                SELECT 
+                    t.team_id,
+                    t.name as team_name,
+                    t.abbrev as team_abbrev,
+                    SUM(
+                        CASE 
+                            WHEN g.home_team_id = t.team_id THEN g.away_score
+                            WHEN g.away_team_id = t.team_id THEN g.home_score
+                            ELSE 0
+                        END
+                    ) as total_points_allowed,
+                    COUNT(DISTINCT g.game_id) as games_played,
+                    ROUND(
+                        SUM(
+                            CASE 
+                                WHEN g.home_team_id = t.team_id THEN g.away_score
+                                WHEN g.away_team_id = t.team_id THEN g.home_score
+                                ELSE 0
+                            END
+                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
+                    ) as points_allowed_per_game
+                FROM team t
+                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                JOIN season s ON g.season_id = s.season_id
+                WHERE s.year = %s
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                GROUP BY t.team_id, t.name, t.abbrev
+            )
+            SELECT 
+                team_id,
+                team_name,
+                team_abbrev,
+                0 as game_id,
+                0 as week,
+                NOW() as game_date,
+                points_allowed_per_game::TEXT as stat_value,
+                '' as opponent
+            FROM team_points_allowed
+            ORDER BY points_allowed_per_game ASC
+            LIMIT %s
+        """
+        params = [season, limit]
+    else:
+        query = """
+            WITH team_points_allowed AS (
+                SELECT 
+                    t.team_id,
+                    t.name as team_name,
+                    t.abbrev as team_abbrev,
+                    SUM(
+                        CASE 
+                            WHEN g.home_team_id = t.team_id THEN g.away_score
+                            WHEN g.away_team_id = t.team_id THEN g.home_score
+                            ELSE 0
+                        END
+                    ) as total_points_allowed,
+                    COUNT(DISTINCT g.game_id) as games_played,
+                    ROUND(
+                        SUM(
+                            CASE 
+                                WHEN g.home_team_id = t.team_id THEN g.away_score
+                                WHEN g.away_team_id = t.team_id THEN g.home_score
+                                ELSE 0
+                            END
+                        )::NUMERIC / NULLIF(COUNT(DISTINCT g.game_id), 0), 1
+                    ) as points_allowed_per_game
+                FROM team t
+                JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                WHERE g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                GROUP BY t.team_id, t.name, t.abbrev
+            )
+            SELECT 
+                team_id,
+                team_name,
+                team_abbrev,
+                0 as game_id,
+                0 as week,
+                NOW() as game_date,
+                points_allowed_per_game::TEXT as stat_value,
+                '' as opponent
+            FROM team_points_allowed
+            ORDER BY points_allowed_per_game ASC
+            LIMIT %s
+        """
+        params = [limit]
+    
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+                
+                columns = [desc[0] for desc in cur.description]
+                leaders = [dict(zip(columns, row)) for row in rows]
+                
+                return [StatLeader(**leader) for leader in leaders]
+                
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+# Helper function to determine conference and division from team abbreviation
+def get_team_conference_division(team_abbrev: str) -> tuple:
+    """Returns (conference, division) for a team based on their abbreviation."""
+    
+    # NFL Conference and Division mapping
+    team_mapping = {
+        # AFC East
+        'BUF': ('AFC', 'AFC East'),
+        'MIA': ('AFC', 'AFC East'),
+        'NE': ('AFC', 'AFC East'),
+        'NYJ': ('AFC', 'AFC East'),
+        
+        # AFC North
+        'BAL': ('AFC', 'AFC North'),
+        'CIN': ('AFC', 'AFC North'),
+        'CLE': ('AFC', 'AFC North'),
+        'PIT': ('AFC', 'AFC North'),
+        
+        # AFC South
+        'HOU': ('AFC', 'AFC South'),
+        'IND': ('AFC', 'AFC South'),
+        'JAX': ('AFC', 'AFC South'),
+        'TEN': ('AFC', 'AFC South'),
+        
+        # AFC West
+        'DEN': ('AFC', 'AFC West'),
+        'KC': ('AFC', 'AFC West'),
+        'LV': ('AFC', 'AFC West'),
+        'LAC': ('AFC', 'AFC West'),
+        
+        # NFC East
+        'DAL': ('NFC', 'NFC East'),
+        'NYG': ('NFC', 'NFC East'),
+        'PHI': ('NFC', 'NFC East'),
+        'WAS': ('NFC', 'NFC East'),
+        
+        # NFC North
+        'CHI': ('NFC', 'NFC North'),
+        'DET': ('NFC', 'NFC North'),
+        'GB': ('NFC', 'NFC North'),
+        'MIN': ('NFC', 'NFC North'),
+        
+        # NFC South
+        'ATL': ('NFC', 'NFC South'),
+        'CAR': ('NFC', 'NFC South'),
+        'NO': ('NFC', 'NFC South'),
+        'TB': ('NFC', 'NFC South'),
+        
+        # NFC West
+        'ARI': ('NFC', 'NFC West'),
+        'LAR': ('NFC', 'NFC West'),
+        'SF': ('NFC', 'NFC West'),
+        'SEA': ('NFC', 'NFC West'),
+    }
+    
+    return team_mapping.get(team_abbrev, ('Unknown', 'Unknown'))
+
+
+@router.get(
+    "/teams/{team_id}/standings",
+    summary="Get Team Standings Info"
+)
+async def get_team_standings(
+    team_id: int = Path(..., description="Team ID"),
+    season: int = Query(..., description="Season year")
+):
+    """
+    Get team's conference rank and division rank for a season.
+    Returns the team's position in their conference and division based on win percentage.
+    """
+    
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                # First get the team info
+                cur.execute(
+                    "SELECT name, abbrev FROM team WHERE team_id = %s",
+                    (team_id,)
+                )
+                team_row = cur.fetchone()
+                
+                if not team_row:
+                    raise HTTPException(status_code=404, detail="Team not found")
+                
+                team_name = team_row[0]
+                team_abbrev = team_row[1]
+                
+                conference, division = get_team_conference_division(team_abbrev)
+                
+                # Calculate standings for all teams in the season
+                standings_query = """
+                    WITH team_records AS (
+                        SELECT 
+                            t.team_id,
+                            t.name,
+                            t.abbrev,
+                            COUNT(DISTINCT g.game_id) as games_played,
+                            SUM(
+                                CASE 
+                                    WHEN (g.home_team_id = t.team_id AND g.home_score > g.away_score) OR
+                                         (g.away_team_id = t.team_id AND g.away_score > g.home_score)
+                                    THEN 1 ELSE 0
+                                END
+                            ) as wins,
+                            SUM(
+                                CASE 
+                                    WHEN (g.home_team_id = t.team_id AND g.home_score < g.away_score) OR
+                                         (g.away_team_id = t.team_id AND g.away_score < g.home_score)
+                                    THEN 1 ELSE 0
+                                END
+                            ) as losses,
+                            SUM(
+                                CASE 
+                                    WHEN g.home_score = g.away_score
+                                    THEN 1 ELSE 0
+                                END
+                            ) as ties
+                        FROM team t
+                        JOIN game g ON (g.home_team_id = t.team_id OR g.away_team_id = t.team_id)
+                        JOIN season s ON g.season_id = s.season_id
+                        WHERE s.year = %s
+                          AND g.home_score IS NOT NULL
+                          AND g.away_score IS NOT NULL
+                        GROUP BY t.team_id, t.name, t.abbrev
+                    )
+                    SELECT 
+                        team_id,
+                        name,
+                        abbrev,
+                        wins,
+                        losses,
+                        ties,
+                        games_played,
+                        ROUND((wins::NUMERIC + ties::NUMERIC * 0.5) / NULLIF(games_played, 0), 3) as win_pct
+                    FROM team_records
+                    ORDER BY win_pct DESC, wins DESC
+                """
+                
+                cur.execute(standings_query, (season,))
+                all_standings = cur.fetchall()
+                
+                # Calculate conference and division ranks
+                conference_rank = None
+                division_rank = None
+                
+                conference_teams = []
+                division_teams = []
+                
+                for idx, row in enumerate(all_standings):
+                    tid, name, abbrev, wins, losses, ties, gp, win_pct = row
+                    team_conf, team_div = get_team_conference_division(abbrev)
+                    
+                    if team_conf == conference:
+                        conference_teams.append((tid, win_pct))
+                        if tid == team_id:
+                            conference_rank = len(conference_teams)
+                    
+                    if team_div == division:
+                        division_teams.append((tid, win_pct))
+                        if tid == team_id:
+                            division_rank = len(division_teams)
+                
+                return {
+                    "team_id": team_id,
+                    "team_name": team_name,
+                    "team_abbrev": team_abbrev,
+                    "season": season,
+                    "conference": conference,
+                    "division": division,
+                    "conference_rank": conference_rank,
+                    "division_rank": division_rank,
+                    "total_conference_teams": len(conference_teams),
+                    "total_division_teams": len(division_teams)
+                }
+                
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
 
 # =========================================================
 # Health Check
