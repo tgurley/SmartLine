@@ -1,0 +1,29 @@
+ENDPOINT: Player Details
+URL: https://smartline-production.up.railway.app/players/1349
+Status Code: 200
+Timestamp (UTC): 2025-12-23_02-20-19
+
+================================================================================
+
+JSON Response:
+{
+  "player_id": 1349,
+  "external_player_id": 1197,
+  "full_name": "Patrick Mahomes",
+  "position": "QB",
+  "jersey_number": 15,
+  "height": "6' 2\"",
+  "weight": "225 lbs",
+  "age": 30,
+  "college": "Texas Tech",
+  "experience_years": 9,
+  "salary": "-",
+  "image_url": "https://media.api-sports.io/american-football/players/1197.png",
+  "player_group": "Injured Reserve Or O",
+  "created_at": "2025-12-22T03:53:31.102304+00:00",
+  "updated_at": "2025-12-22T05:23:18.026474+00:00",
+  "team_id": 54,
+  "team_name": "Kansas City Chiefs",
+  "team_abbrev": "KC",
+  "external_team_key": 17
+}

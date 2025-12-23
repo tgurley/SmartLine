@@ -1,0 +1,953 @@
+ENDPOINT: Player Game Log (All Groups)
+URL: https://smartline-production.up.railway.app/statistics/players/1349/games?season=2023&limit=10
+Status Code: 200
+Timestamp (UTC): 2025-12-23_02-20-21
+
+================================================================================
+
+JSON Response:
+{
+  "player_id": 1349,
+  "player_name": "Patrick Mahomes",
+  "position": "QB",
+  "season": 2023,
+  "game_count": 10,
+  "games": [
+    {
+      "game_id": 1119,
+      "week": 17,
+      "game_date": "2023-12-31T21:25:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Cincinnati Bengals",
+      "opponent_abbrev": "CIN",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "21/29"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "245"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "8.4"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "2-4"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "50.2"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "4"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "0.5"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Fumbles": [
+          {
+            "metric_name": "total",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "lost",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "rec",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "rec td",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1102,
+      "week": 16,
+      "game_date": "2023-12-25T18:00:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Las Vegas Raiders",
+      "opponent_abbrev": "LV",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "27/44"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "235"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "5.3"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "4-23"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "31.6"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "10"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "53"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "5.3"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "13"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Fumbles": [
+          {
+            "metric_name": "total",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "lost",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "rec",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "rec td",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1083,
+      "week": 15,
+      "game_date": "2023-12-17T18:00:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "New England Patriots",
+      "opponent_abbrev": "NE",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "27/37"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "305"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "8.2"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "3-26"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "60.6"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "3"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "-5"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "-1.7"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "-1"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Fumbles": [
+          {
+            "metric_name": "total",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "lost",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "rec",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "rec td",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1068,
+      "week": 14,
+      "game_date": "2023-12-10T21:25:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Buffalo Bills",
+      "opponent_abbrev": "BUF",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "25/43"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "271"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.3"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "1-7"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "27.3"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "8"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "8.0"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "8"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Defense": [
+          {
+            "metric_name": "tackles",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "unassisted tackles",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "tfl",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "passes defended",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "qb hts",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "interceptions for touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "blocked kicks",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "ff",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1056,
+      "week": 13,
+      "game_date": "2023-12-04T01:20:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Green Bay Packers",
+      "opponent_abbrev": "GB",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "21/33"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "210"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.4"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "3-21"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "53.7"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "4"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "26"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.5"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "10"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1041,
+      "week": 12,
+      "game_date": "2023-11-26T21:25:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Las Vegas Raiders",
+      "opponent_abbrev": "LV",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "27/34"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "298"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "8.8"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "1-7"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "80.3"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "5"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "9"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "1.8"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "7"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 1028,
+      "week": 11,
+      "game_date": "2023-11-21T01:15:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Philadelphia Eagles",
+      "opponent_abbrev": "PHI",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "24/43"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "177"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "4.1"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "1-9"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "42.4"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "6"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "38"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.3"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "14"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 988,
+      "week": 9,
+      "game_date": "2023-11-05T14:30:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Miami Dolphins",
+      "opponent_abbrev": "MIA",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "20/30"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "185"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.2"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "2-11"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "45.1"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "6"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "24"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "4.0"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "16"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Fumbles": [
+          {
+            "metric_name": "total",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "lost",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "rec",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "rec td",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 982,
+      "week": 8,
+      "game_date": "2023-10-29T20:25:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Denver Broncos",
+      "opponent_abbrev": "DEN",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "24/38"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "241"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.3"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "2"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "3-28"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "42.4"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "3"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "20"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "6.7"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "8"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ],
+        "Fumbles": [
+          {
+            "metric_name": "total",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "lost",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "rec",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "rec td",
+            "metric_value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "game_id": 968,
+      "week": 7,
+      "game_date": "2023-10-22T20:25:00Z",
+      "season": 2023,
+      "team_name": "Kansas City Chiefs",
+      "team_abbrev": "KC",
+      "opponent": "Los Angeles Chargers",
+      "opponent_abbrev": "LAC",
+      "stat_groups": {
+        "Passing": [
+          {
+            "metric_name": "comp att",
+            "metric_value": "32/42"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "424"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "10.1"
+          },
+          {
+            "metric_name": "passing touch downs",
+            "metric_value": "4"
+          },
+          {
+            "metric_name": "interceptions",
+            "metric_value": "1"
+          },
+          {
+            "metric_name": "sacks",
+            "metric_value": "1-9"
+          },
+          {
+            "metric_name": "rating",
+            "metric_value": "92.0"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          }
+        ],
+        "Rushing": [
+          {
+            "metric_name": "total rushes",
+            "metric_value": "4"
+          },
+          {
+            "metric_name": "yards",
+            "metric_value": "29"
+          },
+          {
+            "metric_name": "average",
+            "metric_value": "7.3"
+          },
+          {
+            "metric_name": "rushing touch downs",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "longest rush",
+            "metric_value": "23"
+          },
+          {
+            "metric_name": "two pt",
+            "metric_value": "0"
+          },
+          {
+            "metric_name": "kick return td",
+            "metric_value": null
+          },
+          {
+            "metric_name": "exp return td",
+            "metric_value": null
+          }
+        ]
+      }
+    }
+  ]
+}
