@@ -104,56 +104,71 @@ class PlayerRankingsResponse(BaseModel):
 # =========================================================
 
 @router.get(
-    "/games/{game_id}/players",
-    response_model=GamePlayerStatisticsResponse,
-    summary="Get Player Statistics for a Game"
+    "/players/{player_id}/games",
+    response_model=PlayerGameStatsResponse,
+    summary="Get Game-by-Game Statistics for a Player"
 )
-async def get_game_player_statistics(
-    game_id: int = Path(..., description="Game ID"),
+async def get_player_game_statistics(
+    player_id: int = Path(..., description="Player ID"),
+    season: Optional[int] = Query(None, description="Filter by season year"),
     stat_group: Optional[str] = Query(
         None,
-        description="Filter by stat group (Passing, Rushing, Receiving, etc.)"
-    )
+        description="Filter by stat group (Passing, Rushing, etc.)"
+    ),
+    limit: int = Query(20, ge=1, le=100, description="Maximum games to return")
 ):
     """
-    Get detailed player statistics for a specific game.
+    Get game-by-game statistics for a specific player.
     
-    Optionally filter by stat group (Passing, Rushing, Receiving, Defense, etc.)
+    Optionally filter by season and/or stat group.
     """
     query = """
-        SELECT 
-            gps.stat_id,
-            gps.player_id,
-            p.full_name as player_name,
-            p.position,
-            t.name as team_name,
-            t.abbrev as team_abbrev,
+        WITH recent_games AS (
+            SELECT
+                g.game_id,
+                g.game_datetime_utc
+            FROM game_player_statistics gps
+            JOIN game g ON gps.game_id = g.game_id
+            JOIN season s ON g.season_id = s.season_id
+            WHERE gps.player_id = %s
+            AND s.year = %s
+            GROUP BY g.game_id, g.game_datetime_utc
+            ORDER BY g.game_datetime_utc DESC
+            LIMIT %s
+        )
+        SELECT
+            gps.game_id,
+            g.week,
+            g.game_datetime_utc,
+            s.year AS season,
             gps.stat_group,
             gps.metric_name,
             gps.metric_value,
-            g.week,
-            g.game_datetime_utc
+            t.name AS team_name,
+            t.abbrev AS team_abbrev,
+            CASE
+                WHEN gps.team_id = g.home_team_id THEN at.name
+                ELSE ht.name
+            END AS opponent_name,
+            CASE
+                WHEN gps.team_id = g.home_team_id THEN at.abbrev
+                ELSE ht.abbrev
+            END AS opponent_abbrev,
+            p.full_name AS player_name,
+            p.position
         FROM game_player_statistics gps
+        JOIN recent_games rg ON gps.game_id = rg.game_id
+        JOIN game g ON gps.game_id = g.game_id
+        JOIN season s ON g.season_id = s.season_id
         JOIN player p ON gps.player_id = p.player_id
         JOIN team t ON gps.team_id = t.team_id
-        JOIN game g ON gps.game_id = g.game_id
-        WHERE gps.game_id = %s
-        {stat_group_filter}
-        ORDER BY 
-            t.name,
-            p.full_name,
-            gps.stat_group,
-            gps.metric_name
+        JOIN team ht ON g.home_team_id = ht.team_id
+        JOIN team at ON g.away_team_id = at.team_id
+        WHERE gps.player_id = %s          -- 🔥 THIS WAS MISSING
+        ORDER BY rg.game_datetime_utc DESC;
     """
     
-    params = [game_id]
-    stat_group_filter = ""
-    
-    if stat_group:
-        stat_group_filter = "AND gps.stat_group = %s"
-        params.append(stat_group)
-    
-    query = query.format(stat_group_filter=stat_group_filter)
+    params = [player_id, season, limit, player_id]
     
     try:
         with get_conn() as conn:
@@ -164,44 +179,48 @@ async def get_game_player_statistics(
                 if not rows:
                     raise HTTPException(
                         status_code=404,
-                        detail=f"Statistics not found for game {game_id}"
+                        detail=f"No statistics found for player {player_id}"
                     )
                 
                 columns = [desc[0] for desc in cur.description]
                 stats = [dict(zip(columns, row)) for row in rows]
                 
-                # Group by player
-                players_dict = {}
-                week = stats[0]['week']
-                game_datetime = stats[0]['game_datetime_utc']
+                # Group by game
+                games_dict = {}
+                player_name = stats[0]['player_name']
+                position = stats[0]['position']
                 
                 for stat in stats:
-                    player_id = stat['player_id']
-                    if player_id not in players_dict:
-                        players_dict[player_id] = {
-                            'player_id': player_id,
-                            'player_name': stat['player_name'],
-                            'position': stat['position'],
+                    game_id = stat['game_id']
+                    if game_id not in games_dict:
+                        games_dict[game_id] = {
+                            'game_id': game_id,
+                            'week': stat['week'],
+                            'game_date': stat['game_datetime_utc'],
+                            'season': stat['season'],
                             'team_name': stat['team_name'],
                             'team_abbrev': stat['team_abbrev'],
+                            'opponent': stat['opponent_name'],
+                            'opponent_abbrev': stat['opponent_abbrev'],
                             'stat_groups': {}
                         }
                     
                     stat_group = stat['stat_group']
-                    if stat_group not in players_dict[player_id]['stat_groups']:
-                        players_dict[player_id]['stat_groups'][stat_group] = []
+                    if stat_group not in games_dict[game_id]['stat_groups']:
+                        games_dict[game_id]['stat_groups'][stat_group] = []
                     
-                    players_dict[player_id]['stat_groups'][stat_group].append({
+                    games_dict[game_id]['stat_groups'][stat_group].append({
                         'metric_name': stat['metric_name'],
                         'metric_value': stat['metric_value']
                     })
                 
-                return GamePlayerStatisticsResponse(
-                    game_id=game_id,
-                    week=week,
-                    game_datetime_utc=game_datetime,
-                    stat_count=len(stats),
-                    players=list(players_dict.values())
+                return PlayerGameStatsResponse(
+                    player_id=player_id,
+                    player_name=player_name,
+                    position=position,
+                    season=season,
+                    game_count=len(games_dict),
+                    games=list(games_dict.values())
                 )
                 
     except psycopg2.Error as e:
