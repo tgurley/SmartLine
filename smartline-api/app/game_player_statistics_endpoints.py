@@ -212,12 +212,15 @@ async def get_player_game_statistics(
     """
     query = """
         WITH recent_games AS (
-            SELECT DISTINCT g.game_id
+            SELECT
+                g.game_id,
+                g.game_datetime_utc
             FROM game_player_statistics gps
             JOIN game g ON gps.game_id = g.game_id
             JOIN season s ON g.season_id = s.season_id
             WHERE gps.player_id = %s
             AND s.year = %s
+            GROUP BY g.game_id, g.game_datetime_utc
             ORDER BY g.game_datetime_utc DESC
             LIMIT %s
         )
