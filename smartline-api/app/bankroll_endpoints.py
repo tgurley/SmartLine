@@ -809,7 +809,7 @@ async def get_overview(
         "won_bets": bet_stats['won_bets'],
         "lost_bets": bet_stats['lost_bets'],
         "push_bets": bet_stats['push_bets'],
-        "avg_bet_size": bet_stats['avg_bet_size'],
+        "avg_bet_size": round(Decimal(str(bet_stats['avg_bet_size'])), 2),
         "current_streak": current_streak
     }
 
