@@ -118,7 +118,7 @@ class BankrollOverview(BaseModel):
     won_bets: int
     lost_bets: int
     push_bets: int
-    avg_bet_size: Decimal
+    avg_bet_size: Decimal = Field(decimal_places=2)
     current_streak: dict
 
 class ChartDataPoint(BaseModel):
