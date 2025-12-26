@@ -6,6 +6,7 @@ from app.player_statistics_endpoints import router as player_statistics_router
 from app.game_team_statistics_endpoints import router as game_team_statistic_router
 from app.game_player_statistics_endpoints import router as game_player_statistics_router
 from app.player_odds_endpoints import router as player_odds_router
+from app.bankroll_endpoints import router as bankroll_router
 from app.models import StrategyRequest
 from app.crud import backtest_strategy
 from app.database import get_connection
@@ -29,6 +30,8 @@ app.include_router(player_statistics_router)
 app.include_router(player_odds_router)
 app.include_router(game_team_statistic_router)
 app.include_router(game_player_statistics_router)
+
+app.include_router(bankroll_router)
 
 @app.post("/backtest")
 def backtest(strategy: StrategyRequest):
