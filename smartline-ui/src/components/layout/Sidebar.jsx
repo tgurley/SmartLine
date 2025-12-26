@@ -6,6 +6,7 @@ import {
   BarChart3,
   Trophy,
   Settings,
+  Wallet,
   X
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -16,6 +17,7 @@ const navItems = [
   { icon: TrendingUp, label: 'Odds', path: '/odds' },
   { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   { icon: Trophy, label: 'Standings', path: '/standings' },
+  { icon: Wallet, label: 'Bankroll Manager', path: '/bankroll' },
 ];
 
 const Sidebar = ({ isOpen, onClose }) => {

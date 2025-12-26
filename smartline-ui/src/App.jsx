@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -9,14 +10,16 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import WeatherAnalytics from './pages/WeatherAnalytics';
 import PlayerDetailPage from './pages/PlayerDetailPage';
 import TeamDetailPage from './pages/TeamDetailPage';
+import OddsDashboard from './pages/OddsDashboard';
+import BankrollDashboard from './pages/BankrollDashboard';
 
 // Placeholder pages - to be built later
-const OddsPage = () => (
-  <div>
-    <h1 className="text-3xl font-display font-bold text-white mb-4">Odds</h1>
-    <p className="text-slate-400">Odds comparison page coming soon...</p>
-  </div>
-);
+// const OddsPage = () => (
+//   <div>
+//     <h1 className="text-3xl font-display font-bold text-white mb-4">Odds</h1>
+//     <p className="text-slate-400">Odds comparison page coming soon...</p>
+//   </div>
+// );
 
 // const AnalyticsPage = () => (
 //   <div>
@@ -39,7 +42,25 @@ const SettingsPage = () => (
   </div>
 );
 
+
 function App() {
+  // Add this useEffect at the top level of your App component
+  useEffect(() => {
+    // Prevent scroll on number inputs
+    const handleWheel = (e) => {
+      if (e.target.type === 'number') {
+        e.target.blur();
+      }
+    };
+
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+
   return (
     <BrowserRouter>
       <Routes>
@@ -55,11 +76,12 @@ function App() {
           <Route path="games/:gameId" element={<GameDetailPage />} />
           <Route path="players/:playerId" element={<PlayerDetailPage />} />
           <Route path="teams/:teamId" element={<TeamDetailPage />} />
-          <Route path="odds" element={<OddsPage />} />
+          <Route path="odds" element={<OddsDashboard />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="analytics/weather" element={<WeatherAnalytics />} />
           <Route path="standings" element={<StandingsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="bankroll" element={<BankrollDashboard />} />
         </Route>
         
         {/* Catch all - redirect to landing */}
