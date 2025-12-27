@@ -829,34 +829,38 @@ async def get_chart_data(
     
     cursor.execute("""
         WITH RECURSIVE date_series AS (
+            -- Generate date range
             SELECT CURRENT_DATE - INTERVAL '1 day' * (%s - 1) as date
             UNION ALL
             SELECT date + INTERVAL '1 day'
             FROM date_series
             WHERE date < CURRENT_DATE
         ),
-        daily_balance AS (
+        account_starting_balance AS (
+            -- Get the TOTAL starting balance across all accounts (calculated once)
+            SELECT COALESCE(SUM(starting_balance), 0) as total_starting
+            FROM bankroll_accounts
+            WHERE user_id = %s
+        ),
+        daily_pl AS (
+            -- Calculate cumulative profit/loss from settled bets only
             SELECT 
                 ds.date,
-                COALESCE(SUM(ba.starting_balance), 0) as starting_balance,
-                COALESCE(SUM(
-                    CASE 
-                        WHEN bt.transaction_type = 'bet_settled' AND bt.amount > 0 THEN bt.amount
-                        WHEN bt.transaction_type = 'bet_placed' THEN bt.amount
-                        ELSE 0
-                    END
-                ) FILTER (WHERE DATE(bt.created_at) <= ds.date), 0) as cumulative_change
+                COALESCE(SUM(b.profit_loss) FILTER (
+                    WHERE DATE(b.settled_at) <= ds.date 
+                    AND b.status IN ('won', 'lost', 'push')
+                ), 0) as cumulative_pl
             FROM date_series ds
-            LEFT JOIN bankroll_accounts ba ON ba.user_id = %s
-            LEFT JOIN bankroll_transactions bt ON bt.user_id = %s
+            LEFT JOIN bets b ON b.user_id = %s
             GROUP BY ds.date
         )
         SELECT 
-            TO_CHAR(date, 'YYYY-MM-DD') as date,
-            starting_balance + cumulative_change as balance,
-            cumulative_change as profit_loss
-        FROM daily_balance
-        ORDER BY date
+            TO_CHAR(dpl.date, 'YYYY-MM-DD') as date,
+            asb.total_starting + dpl.cumulative_pl as balance,
+            dpl.cumulative_pl as profit_loss
+        FROM daily_pl dpl
+        CROSS JOIN account_starting_balance asb
+        ORDER BY dpl.date
     """, [days, user_id, user_id])
     
     results = cursor.fetchall()
