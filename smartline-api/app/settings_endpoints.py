@@ -95,7 +95,7 @@ def get_db():
 # =========================================================
 
 # Note: Add these to your existing bankroll router
-router = APIRouter(prefix="/settings/bankroll", tags=["Bankroll Manager"])
+router = APIRouter(prefix="/bankroll", tags=["Bankroll Manager"])
 
 def get_user_settings(user_id: int, conn):
     """Helper function to get settings."""
