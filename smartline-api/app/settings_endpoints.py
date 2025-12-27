@@ -95,7 +95,7 @@ def get_db():
 # =========================================================
 
 # Note: Add these to your existing bankroll router
-# router = APIRouter(prefix="/bankroll", tags=["Bankroll Manager"])
+router = APIRouter(prefix="/settings/bankroll", tags=["Bankroll Manager"])
 
 def get_user_settings(user_id: int, conn):
     """Helper function to get settings."""
@@ -121,7 +121,6 @@ def create_default_settings(user_id: int, conn):
     return settings
 
 # Add this to your router:
-"""
 @router.get("/settings", response_model=BankrollSettings)
 async def get_settings(
     user_id: int = Query(default=1),
@@ -375,4 +374,3 @@ async def get_recommended_unit(
             "bankroll": float(bankroll),
             "percentage": float(settings['unit_size_value'])
         }
-"""
