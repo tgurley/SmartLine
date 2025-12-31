@@ -95,7 +95,7 @@ def get_db():
 # =========================================================
 
 # Note: Add these to your existing bankroll router
-router = APIRouter(prefix="/bankroll", tags=["Bankroll Manager"])
+# router = APIRouter(prefix="/bankroll", tags=["Bankroll Manager"])
 
 def get_user_settings(user_id: int, conn):
     """Helper function to get settings."""
@@ -121,7 +121,8 @@ def create_default_settings(user_id: int, conn):
     return settings
 
 # Add this to your router:
-@router.get("/settings", response_model=BankrollSettings)
+"""
+@router.get("/settings")
 async def get_settings(
     user_id: int = Query(default=1),
     conn = Depends(get_db)
@@ -138,9 +139,17 @@ async def get_settings(
         # Create default settings
         settings = create_default_settings(user_id, conn)
     
+    # Convert datetime objects to strings
+    if settings:
+        settings = dict(settings)
+        if settings.get('created_at'):
+            settings['created_at'] = settings['created_at'].isoformat()
+        if settings.get('updated_at'):
+            settings['updated_at'] = settings['updated_at'].isoformat()
+    
     return settings
 
-@router.put("/settings", response_model=BankrollSettings)
+@router.put("/settings")
 async def update_settings(
     settings_update: SettingsUpdate,
     user_id: int = Query(default=1),
@@ -172,7 +181,12 @@ async def update_settings(
                 params.append(value)
         
         if not update_fields:
-            return existing
+            result = dict(existing)
+            if result.get('created_at'):
+                result['created_at'] = result['created_at'].isoformat()
+            if result.get('updated_at'):
+                result['updated_at'] = result['updated_at'].isoformat()
+            return result
         
         params.append(user_id)
         query = f'''
@@ -187,14 +201,21 @@ async def update_settings(
         conn.commit()
         cursor.close()
         
-        return updated
+        # Convert datetime to string
+        result = dict(updated)
+        if result.get('created_at'):
+            result['created_at'] = result['created_at'].isoformat()
+        if result.get('updated_at'):
+            result['updated_at'] = result['updated_at'].isoformat()
+        
+        return result
         
     except Exception as e:
         conn.rollback()
         cursor.close()
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
-@router.post("/settings/reset", response_model=BankrollSettings)
+@router.post("/settings/reset")
 async def reset_settings(
     user_id: int = Query(default=1),
     conn = Depends(get_db)
@@ -215,7 +236,14 @@ async def reset_settings(
         # Create new defaults
         settings = create_default_settings(user_id, conn)
         
-        return settings
+        # Convert datetime to string
+        result = dict(settings)
+        if result.get('created_at'):
+            result['created_at'] = result['created_at'].isoformat()
+        if result.get('updated_at'):
+            result['updated_at'] = result['updated_at'].isoformat()
+        
+        return result
         
     except Exception as e:
         conn.rollback()
@@ -374,3 +402,4 @@ async def get_recommended_unit(
             "bankroll": float(bankroll),
             "percentage": float(settings['unit_size_value'])
         }
+"""
