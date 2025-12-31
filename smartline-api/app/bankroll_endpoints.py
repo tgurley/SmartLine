@@ -1370,6 +1370,7 @@ async def get_market_deep_dive(
             SELECT market_key, profit_loss, bet_count
             FROM market_stats
             WHERE bet_count >= 3
+            AND profit_loss > 0  -- Only positive P/L
             ORDER BY profit_loss DESC
             LIMIT 3
         ''', [user_id, days])
@@ -1391,6 +1392,7 @@ async def get_market_deep_dive(
             SELECT market_key, profit_loss, bet_count
             FROM market_stats
             WHERE bet_count >= 3
+            AND profit_loss < 0  -- Only negative P/L
             ORDER BY profit_loss ASC
             LIMIT 3
         ''', [user_id, days])
@@ -1729,4 +1731,3 @@ async def get_insights(
     except Exception as e:
         cursor.close()
         raise HTTPException(status_code=500, detail=f"Failed to generate insights: {str(e)}")
-
