@@ -987,7 +987,8 @@ async def get_market_performance(
                     ELSE 0
                 END,
             1) as win_rate,
-            COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as total_profit_loss
+            COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as total_profit_loss,
+            ROUND(COALESCE(AVG(stake_amount), 0), 2) as avg_stake
         FROM bets
         WHERE user_id = %s
         AND placed_at >= CURRENT_DATE - INTERVAL '%s days'
