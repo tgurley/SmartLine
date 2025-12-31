@@ -94,7 +94,6 @@ async def export_csv(
                 b.bet_side,
                 b.line_value,
                 b.odds_american,
-                b.odds_decimal,
                 b.stake_amount,
                 b.potential_payout,
                 b.status,
@@ -115,10 +114,10 @@ async def export_csv(
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header
+        # Write header (removed Odds Decimal)
         writer.writerow([
             'Bet ID', 'Date Placed', 'Bookmaker', 'Bet Type', 'Sport', 
-            'Market', 'Side', 'Line', 'Odds (American)', 'Odds (Decimal)',
+            'Market', 'Side', 'Line', 'Odds (American)',
             'Stake', 'Potential Payout', 'Status', 'Actual Payout', 
             'Profit/Loss', 'Settled Date', 'Notes'
         ])
@@ -135,7 +134,6 @@ async def export_csv(
                 bet['bet_side'],
                 bet['line_value'] or '',
                 bet['odds_american'] or '',
-                bet['odds_decimal'] or '',
                 float(bet['stake_amount']) if bet['stake_amount'] else '',
                 float(bet['potential_payout']) if bet['potential_payout'] else '',
                 bet['status'],
