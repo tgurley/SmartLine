@@ -154,6 +154,19 @@ class Transaction(BaseModel):
     description: Optional[str]
     created_at: datetime
 
+class GoalCreate(BaseModel):
+    goal_type: Literal['daily', 'weekly', 'monthly', 'yearly']
+    goal_amount: Decimal = Field(..., gt=0)
+    start_date: date
+    end_date: date
+    description: Optional[str] = None
+
+class GoalUpdate(BaseModel):
+    goal_amount: Optional[Decimal] = Field(None, gt=0)
+    end_date: Optional[date] = None
+    description: Optional[str] = None
+    status: Optional[Literal['active', 'completed', 'failed']] = None
+
 # =========================================================
 # DATABASE CONNECTION
 # =========================================================
@@ -1054,20 +1067,16 @@ async def get_transactions(
 
 @router.post("/goals")
 async def create_goal(
-    goal_type: str,
-    goal_amount: Decimal,
-    start_date: str,
-    end_date: str,
-    description: str = None,
+    goal_data: GoalCreate,
     user_id: int = Query(default=1),
     conn = Depends(get_db)
 ):
-    '''
+    """
     Create a new profit goal.
     
     **Use Case:** Goal creation from dashboard
     **Returns:** Created goal with ID
-    '''
+    """
     cursor = conn.cursor()
     
     try:
@@ -1077,8 +1086,17 @@ async def create_goal(
                 start_date, end_date, description
             )
             VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING *
-        ''', [user_id, goal_type, goal_amount, start_date, end_date, description])
+            RETURNING goal_id, user_id, goal_type, goal_amount, 
+                      start_date, end_date, status, description, 
+                      created_at, completed_at
+        ''', [
+            user_id, 
+            goal_data.goal_type, 
+            goal_data.goal_amount, 
+            goal_data.start_date, 
+            goal_data.end_date, 
+            goal_data.description
+        ])
         
         goal = cursor.fetchone()
         conn.commit()
@@ -1097,12 +1115,12 @@ async def get_goals(
     status: str = Query(default='active'),
     conn = Depends(get_db)
 ):
-    '''
+    """
     Get user goals with progress.
     
     **Use Case:** Goals dashboard
     **Returns:** List of goals with progress
-    '''
+    """
     cursor = conn.cursor()
     
     try:
@@ -1110,7 +1128,13 @@ async def get_goals(
             SELECT * FROM v_goal_progress
             WHERE user_id = %s
             AND (%s = 'all' OR status = %s)
-            ORDER BY end_date DESC
+            ORDER BY 
+                CASE status
+                    WHEN 'active' THEN 1
+                    WHEN 'completed' THEN 2
+                    WHEN 'failed' THEN 3
+                END,
+                end_date DESC
         ''', [user_id, status, status])
         
         goals = cursor.fetchall()
@@ -1122,56 +1146,26 @@ async def get_goals(
         cursor.close()
         raise HTTPException(status_code=500, detail=f"Failed to get goals: {str(e)}")
 
-@router.put("/goals/{goal_id}")
-async def update_goal(
+@router.get("/goals/{goal_id}")
+async def get_goal(
     goal_id: int,
-    goal_amount: Decimal = None,
-    end_date: str = None,
-    description: str = None,
-    status: str = None,
     conn = Depends(get_db)
 ):
-    '''
-    Update a goal.
+    """
+    Get a single goal with progress.
     
-    **Use Case:** Edit goal from dashboard
-    **Returns:** Updated goal
-    '''
+    **Use Case:** Goal details
+    **Returns:** Goal with current progress
+    """
     cursor = conn.cursor()
     
     try:
-        update_fields = []
-        params = []
-        
-        if goal_amount is not None:
-            update_fields.append("goal_amount = %s")
-            params.append(goal_amount)
-        if end_date is not None:
-            update_fields.append("end_date = %s")
-            params.append(end_date)
-        if description is not None:
-            update_fields.append("description = %s")
-            params.append(description)
-        if status is not None:
-            update_fields.append("status = %s")
-            params.append(status)
-            if status == 'completed':
-                update_fields.append("completed_at = NOW()")
-        
-        if not update_fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
-        
-        params.append(goal_id)
-        query = f'''
-            UPDATE user_goals
-            SET {', '.join(update_fields)}, updated_at = NOW()
+        cursor.execute('''
+            SELECT * FROM v_goal_progress
             WHERE goal_id = %s
-            RETURNING *
-        '''
+        ''', [goal_id])
         
-        cursor.execute(query, params)
         goal = cursor.fetchone()
-        conn.commit()
         cursor.close()
         
         if not goal:
@@ -1179,6 +1173,75 @@ async def update_goal(
         
         return goal
         
+    except HTTPException:
+        raise
+    except Exception as e:
+        cursor.close()
+        raise HTTPException(status_code=500, detail=f"Failed to get goal: {str(e)}")
+
+@router.put("/goals/{goal_id}")
+async def update_goal(
+    goal_id: int,
+    goal_data: GoalUpdate,
+    conn = Depends(get_db)
+):
+    """
+    Update a goal.
+    
+    **Use Case:** Edit goal details
+    **Returns:** Updated goal
+    """
+    cursor = conn.cursor()
+    
+    try:
+        update_fields = []
+        params = []
+        
+        if goal_data.goal_amount is not None:
+            update_fields.append("goal_amount = %s")
+            params.append(goal_data.goal_amount)
+        
+        if goal_data.end_date is not None:
+            update_fields.append("end_date = %s")
+            params.append(goal_data.end_date)
+        
+        if goal_data.description is not None:
+            update_fields.append("description = %s")
+            params.append(goal_data.description)
+        
+        if goal_data.status is not None:
+            update_fields.append("status = %s")
+            params.append(goal_data.status)
+            
+            if goal_data.status == 'completed':
+                update_fields.append("completed_at = NOW()")
+        
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        params.append(goal_id)
+        query = f"""
+            UPDATE user_goals 
+            SET {', '.join(update_fields)}
+            WHERE goal_id = %s
+            RETURNING goal_id, user_id, goal_type, goal_amount, 
+                      start_date, end_date, status, description, 
+                      created_at, completed_at
+        """
+        
+        cursor.execute(query, params)
+        goal = cursor.fetchone()
+        
+        if not goal:
+            raise HTTPException(status_code=404, detail="Goal not found")
+        
+        conn.commit()
+        cursor.close()
+        
+        return goal
+        
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         cursor.close()
@@ -1189,25 +1252,33 @@ async def delete_goal(
     goal_id: int,
     conn = Depends(get_db)
 ):
-    '''
+    """
     Delete a goal.
     
-    **Use Case:** Remove goal from dashboard
+    **Use Case:** Remove unwanted goal
     **Returns:** Success message
-    '''
+    """
     cursor = conn.cursor()
     
     try:
-        cursor.execute("DELETE FROM user_goals WHERE goal_id = %s RETURNING goal_id", [goal_id])
+        cursor.execute('''
+            DELETE FROM user_goals
+            WHERE goal_id = %s
+            RETURNING goal_id
+        ''', [goal_id])
+        
         result = cursor.fetchone()
-        conn.commit()
-        cursor.close()
         
         if not result:
             raise HTTPException(status_code=404, detail="Goal not found")
         
-        return {"success": True, "message": "Goal deleted"}
+        conn.commit()
+        cursor.close()
         
+        return {"message": "Goal deleted successfully", "goal_id": goal_id}
+        
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         cursor.close()
