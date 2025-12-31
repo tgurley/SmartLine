@@ -1,20 +1,19 @@
 """
 Export & Reporting Endpoints - Phase 4B
 ========================================
-Add these to your bankroll_endpoints.py or create as separate router
 """
 
 from fastapi import APIRouter, Query, Depends, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
-from typing import Optional, List, Literal
-from datetime import datetime, date
+from fastapi.responses import StreamingResponse
+from typing import Optional
+from datetime import datetime
 from decimal import Decimal
 import csv
 import io
-import tempfile
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import traceback
 
 
 def get_db():
@@ -32,13 +31,9 @@ def get_db():
     finally:
         conn.close()
 
-# Will add openpyxl and reportlab imports when we get to Excel/PDF
 
 router = APIRouter(prefix="/bankroll/export", tags=["Export & Reports"])
 
-# =========================================================
-# CSV EXPORT
-# =========================================================
 
 @router.get("/csv")
 async def export_csv(
@@ -51,15 +46,11 @@ async def export_csv(
     search: Optional[str] = Query(default=None),
     conn = Depends(get_db)
 ):
-    """
-    Export bets to CSV format with optional filtering.
-    
-    **Use Case:** Download betting data for analysis
-    **Returns:** CSV file download
-    """
-    cursor = conn.cursor()
-    
+    """Export bets to CSV format with optional filtering."""
+    cursor = None
     try:
+        cursor = conn.cursor()
+        
         # Build dynamic WHERE clause
         where_clauses = ["b.user_id = %s"]
         params = [user_id]
@@ -119,7 +110,6 @@ async def export_csv(
         
         cursor.execute(query, params)
         bets = cursor.fetchall()
-        cursor.close()
         
         # Create CSV in memory
         output = io.StringIO()
@@ -155,11 +145,11 @@ async def export_csv(
                 bet['notes'] or ''
             ])
         
-        # Prepare response
         output.seek(0)
-        
-        # Generate filename
         filename = f"bets_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        if cursor:
+            cursor.close()
         
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -170,13 +160,15 @@ async def export_csv(
         )
         
     except Exception as e:
+        print(f"❌ Export CSV Error: {str(e)}")
+        traceback.print_exc()
         if cursor:
-            cursor.close()
-        raise HTTPException(status_code=500, detail=f"Failed to export CSV: {str(e)}")
+            try:
+                cursor.close()
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
-# =========================================================
-# SUMMARY REPORT (JSON for preview)
-# =========================================================
 
 @router.get("/summary")
 async def get_export_summary(
@@ -188,16 +180,11 @@ async def get_export_summary(
     status: Optional[str] = Query(default=None),
     conn = Depends(get_db)
 ):
-    """
-    Get summary statistics for export preview.
-    
-    **Use Case:** Show user what they're about to export
-    **Returns:** Summary stats
-    """
-    cursor = conn.cursor()
-    
+    """Get summary statistics for export preview."""
+    cursor = None
     try:
-        # Build WHERE clause (same as CSV export)
+        cursor = conn.cursor()
+        
         where_clauses = ["b.user_id = %s"]
         params = [user_id]
         
@@ -223,7 +210,6 @@ async def get_export_summary(
         
         where_clause = " AND ".join(where_clauses)
         
-        # Get summary stats
         query = f"""
             SELECT 
                 COUNT(*) as total_bets,
@@ -250,7 +236,9 @@ async def get_export_summary(
         
         cursor.execute(query, params)
         summary = cursor.fetchone()
-        cursor.close()
+        
+        if cursor:
+            cursor.close()
         
         return {
             "total_bets": summary['total_bets'],
@@ -267,28 +255,26 @@ async def get_export_summary(
         }
         
     except Exception as e:
+        print(f"❌ Summary Error: {str(e)}")
+        traceback.print_exc()
         if cursor:
-            cursor.close()
-        raise HTTPException(status_code=500, detail=f"Failed to get summary: {str(e)}")
+            try:
+                cursor.close()
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Summary failed: {str(e)}")
 
-# =========================================================
-# FILTER OPTIONS (Get available bookmakers/markets)
-# =========================================================
 
 @router.get("/filter-options")
 async def get_filter_options(
     user_id: int = Query(default=1),
     conn = Depends(get_db)
 ):
-    """
-    Get available filter options (bookmakers, markets, etc).
-    
-    **Use Case:** Populate filter dropdowns
-    **Returns:** Lists of available filter values
-    """
-    cursor = conn.cursor()
-    
+    """Get available filter options."""
+    cursor = None
     try:
+        cursor = conn.cursor()
+        
         # Get unique bookmakers
         cursor.execute("""
             SELECT DISTINCT ba.bookmaker_name
@@ -318,7 +304,8 @@ async def get_filter_options(
         """, [user_id])
         sports = [row['sport'] for row in cursor.fetchall()]
         
-        cursor.close()
+        if cursor:
+            cursor.close()
         
         return {
             "bookmakers": bookmakers,
@@ -328,6 +315,11 @@ async def get_filter_options(
         }
         
     except Exception as e:
+        print(f"❌ Filter Options Error: {str(e)}")
+        traceback.print_exc()
         if cursor:
-            cursor.close()
-        raise HTTPException(status_code=500, detail=f"Failed to get filter options: {str(e)}")
+            try:
+                cursor.close()
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Filter options failed: {str(e)}")
