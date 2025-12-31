@@ -760,17 +760,17 @@ async def settle_bet(
 @router.get("/analytics/overview", response_model=BankrollOverview)
 async def get_overview(
     user_id: int = Query(default=1),
+    days: int = Query(default=30, ge=1, le=365),
     conn = Depends(get_db)
 ):
     """
     Get complete bankroll overview for dashboard.
     
     **Use Case:** Main dashboard stats
-    **Returns:** All key metrics
+    **Returns:** All key metrics filtered by date range
     """
     cursor = conn.cursor()
     
-    # Get bankroll stats
     cursor.execute("""
         SELECT * FROM v_bankroll_overview WHERE user_id = %s
     """, [user_id])
@@ -779,22 +779,70 @@ async def get_overview(
         'total_profit_loss': 0, 'roi_percentage': 0
     }
     
-    # Get bet stats
     cursor.execute("""
-        SELECT * FROM v_bet_statistics WHERE user_id = %s
-    """, [user_id])
+        SELECT 
+            COUNT(*) as total_bets,
+            COUNT(*) FILTER (WHERE status = 'pending') as pending_bets,
+            COUNT(*) FILTER (WHERE status = 'won') as won_bets,
+            COUNT(*) FILTER (WHERE status = 'lost') as lost_bets,
+            COUNT(*) FILTER (WHERE status = 'push') as push_bets,
+            COALESCE(SUM(stake_amount) FILTER (WHERE status = 'pending'), 0) as locked_in_bets,
+            COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as total_profit_loss,
+            ROUND(
+                CASE 
+                    WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                        (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                         COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                    ELSE 0
+                END,
+            1) as win_rate,
+            ROUND(COALESCE(AVG(stake_amount), 0), 2) as avg_bet_size
+        FROM bets
+        WHERE user_id = %s
+        AND placed_at >= CURRENT_DATE - INTERVAL '%s days'
+    """, [user_id, days])
+    
     bet_stats = cursor.fetchone() or {
         'total_bets': 0, 'pending_bets': 0, 'won_bets': 0, 
         'lost_bets': 0, 'push_bets': 0, 'locked_in_bets': 0,
         'total_profit_loss': 0, 'win_rate': 0, 'avg_bet_size': 0
     }
     
-    # Get current streak
-    current_streak = get_current_streak(cursor, user_id)
+    cursor.execute("""
+        WITH recent_bets AS (
+            SELECT status, settled_at
+            FROM bets
+            WHERE user_id = %s
+            AND status IN ('won', 'lost')
+            AND settled_at IS NOT NULL
+            AND placed_at >= CURRENT_DATE - INTERVAL '%s days'
+            ORDER BY settled_at DESC
+            LIMIT 20
+        ),
+        streak_calc AS (
+            SELECT 
+                status,
+                COUNT(*) as streak_length,
+                ROW_NUMBER() OVER (ORDER BY MIN(settled_at) DESC) as streak_num
+            FROM (
+                SELECT 
+                    status,
+                    settled_at,
+                    ROW_NUMBER() OVER (ORDER BY settled_at DESC) - 
+                    ROW_NUMBER() OVER (PARTITION BY status ORDER BY settled_at DESC) as grp
+                FROM recent_bets
+            ) grouped
+            GROUP BY status, grp
+        )
+        SELECT status, streak_length
+        FROM streak_calc
+        WHERE streak_num = 1
+    """, [user_id, days])
+    
+    current_streak = cursor.fetchone()
     
     cursor.close()
     
-    # Calculate available balance
     available_balance = Decimal(str(bankroll_stats['total_bankroll'])) - Decimal(str(bet_stats['locked_in_bets']))
     
     return {
@@ -871,21 +919,40 @@ async def get_chart_data(
 @router.get("/analytics/by-bookmaker", response_model=List[BookmakerPerformance])
 async def get_bookmaker_performance(
     user_id: int = Query(default=1),
+    days: int = Query(default=30, ge=1, le=365),
     conn = Depends(get_db)
 ):
     """
     Get performance breakdown by sportsbook.
     
     **Use Case:** Compare bookmaker profitability
-    **Returns:** Stats per bookmaker
+    **Returns:** Stats per bookmaker filtered by date range
     """
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT * FROM v_performance_by_bookmaker 
-        WHERE user_id = %s
+        SELECT 
+            ba.bookmaker_name,
+            COUNT(b.bet_id) as total_bets,
+            COUNT(b.bet_id) FILTER (WHERE b.status = 'won') as won_bets,
+            COUNT(b.bet_id) FILTER (WHERE b.status = 'lost') as lost_bets,
+            ROUND(
+                CASE 
+                    WHEN COUNT(b.bet_id) FILTER (WHERE b.status IN ('won', 'lost')) > 0 THEN
+                        (COUNT(b.bet_id) FILTER (WHERE b.status = 'won')::numeric / 
+                         COUNT(b.bet_id) FILTER (WHERE b.status IN ('won', 'lost')) * 100)
+                    ELSE 0
+                END,
+            1) as win_rate,
+            COALESCE(SUM(b.profit_loss) FILTER (WHERE b.status IN ('won', 'lost', 'push')), 0) as total_profit_loss
+        FROM bankroll_accounts ba
+        LEFT JOIN bets b ON ba.account_id = b.account_id 
+            AND b.placed_at >= CURRENT_DATE - INTERVAL '%s days'
+        WHERE ba.user_id = %s
+        GROUP BY ba.bookmaker_name
+        HAVING COUNT(b.bet_id) > 0
         ORDER BY total_profit_loss DESC
-    """, [user_id])
+    """, [days, user_id])
     
     results = cursor.fetchall()
     cursor.close()
@@ -895,21 +962,44 @@ async def get_bookmaker_performance(
 @router.get("/analytics/by-market", response_model=List[MarketPerformance])
 async def get_market_performance(
     user_id: int = Query(default=1),
+    days: int = Query(default=30, ge=1, le=365),
     conn = Depends(get_db)
 ):
     """
     Get performance breakdown by market type.
     
     **Use Case:** Identify best/worst bet types
-    **Returns:** Stats per market
+    **Returns:** Stats per market filtered by date range
     """
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT * FROM v_performance_by_market 
+        SELECT 
+            market_key,
+            COUNT(*) as total_bets,
+            COUNT(*) FILTER (WHERE status = 'won') as won_bets,
+            COUNT(*) FILTER (WHERE status = 'lost') as lost_bets,
+            ROUND(
+                CASE 
+                    WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                        (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                         COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                    ELSE 0
+                END,
+            1) as win_rate,
+            COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as total_profit_loss
+        FROM bets
         WHERE user_id = %s
+        AND placed_at >= CURRENT_DATE - INTERVAL '%s days'
+        AND market_key IS NOT NULL
+        GROUP BY market_key
         ORDER BY total_profit_loss DESC
-    """, [user_id])
+    """, [user_id, days])
+    
+    results = cursor.fetchall()
+    cursor.close()
+    
+    return results
     
     results = cursor.fetchall()
     cursor.close()
