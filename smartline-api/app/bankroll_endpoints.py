@@ -22,6 +22,16 @@ Endpoints:
 14. GET   /bankroll/analytics/by-market - Performance by market
 
 15. GET   /bankroll/transactions - Transaction history
+
+16. POST /bankroll/parlays - Create parlay
+17. GET /bankroll/parlays - List parlays
+18. GET /bankroll/parlays/{parlay_id} - Get single parlay
+19. POST /bankroll/parlays/{parlay_id}/settle - Settle parlay
+20. DELETE /bankroll/parlays/{parlay_id} - Delete pending parlay
+
+21. GET /bankroll/analytics/by-sport - Performance per sport
+22. GET /bankroll/analytics/parlay-stats - Parlay analytics
+23. GET /bankroll/analytics/sport-trends - Daily trends by sport
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -173,6 +183,55 @@ class GoalUpdate(BaseModel):
     end_date: Optional[date] = None
     description: Optional[str] = None
     status: Optional[Literal['active', 'completed', 'failed']] = None
+    
+# =========================================================
+# PARLAY MODELS
+# =========================================================
+
+class ParlayLeg(BaseModel):
+    """Single leg of a parlay"""
+    bet_type: str
+    sport: str = "NFL"
+    market_key: str
+    bet_side: Optional[str] = None
+    line_value: Optional[float] = None
+    odds_american: int
+    
+    # Optional references
+    game_id: Optional[int] = None
+    player_id: Optional[int] = None
+    sport_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class ParlayCreate(BaseModel):
+    """Create a new parlay"""
+    account_id: int
+    legs: List[ParlayLeg]  # 2-15 legs
+    stake_amount: float
+    notes: Optional[str] = None
+
+
+class ParlayResponse(BaseModel):
+    """Parlay with calculated fields"""
+    parlay_id: int
+    user_id: int
+    account_id: int
+    bookmaker_name: Optional[str]
+    total_legs: int
+    combined_odds_american: int
+    stake_amount: float
+    potential_payout: float
+    actual_payout: Optional[float]
+    profit_loss: Optional[float]
+    sport_mix: str
+    status: str
+    placed_at: datetime
+    settled_at: Optional[datetime]
+    legs_won: int
+    legs_lost: int
+    legs_pending: int
+    legs: List[dict]
 
 # =========================================================
 # DATABASE CONNECTION
@@ -234,6 +293,63 @@ def get_current_streak(cursor, user_id: int):
             break
     
     return {"type": current_status, "length": streak_length}
+
+# =========================================================
+# PARLAY HELPER FUNCTIONS
+# =========================================================
+
+def calculate_parlay_odds(legs: List[ParlayLeg]) -> int:
+    """
+    Calculate combined American odds for a parlay.
+    
+    Formula:
+    1. Convert each American odds to decimal
+    2. Multiply all decimal odds together
+    3. Convert back to American odds
+    """
+    decimal_odds = []
+    
+    for leg in legs:
+        if leg.odds_american > 0:
+            # Positive odds: (odds / 100) + 1
+            decimal = (leg.odds_american / 100) + 1
+        else:
+            # Negative odds: (100 / abs(odds)) + 1
+            decimal = (100 / abs(leg.odds_american)) + 1
+        
+        decimal_odds.append(decimal)
+    
+    # Multiply all decimal odds
+    combined_decimal = 1.0
+    for odds in decimal_odds:
+        combined_decimal *= odds
+    
+    # Convert back to American
+    if combined_decimal >= 2.0:
+        # Positive odds: (decimal - 1) * 100
+        american = int((combined_decimal - 1) * 100)
+    else:
+        # Negative odds: -100 / (decimal - 1)
+        american = int(-100 / (combined_decimal - 1))
+    
+    return american
+
+
+def calculate_parlay_payout(stake: float, american_odds: int) -> float:
+    """Calculate parlay payout from American odds"""
+    if american_odds > 0:
+        return stake * (1 + american_odds / 100)
+    else:
+        return stake * (1 + 100 / abs(american_odds))
+
+
+def get_sport_mix(legs: List[ParlayLeg]) -> str:
+    """Get unique sports in parlay"""
+    sports = sorted(set(leg.sport for leg in legs))
+    if len(sports) == 1:
+        return sports[0]
+    else:
+        return "+".join(sports)
 
 # =========================================================
 # ACCOUNTS ENDPOINTS
@@ -2260,3 +2376,753 @@ def create_alert(cursor, user_id, alert_type, message, conn):
         conn.commit()
     except Exception as e:
         print(f"Create alert error: {e}")
+        
+# =========================================================
+# PARLAY ENDPOINTS
+# =========================================================
+
+@router.post("/bankroll/parlays", response_model=ParlayResponse)
+async def create_parlay(
+    parlay: ParlayCreate,
+    user_id: int = Query(default=1),
+    conn = Depends(get_db)
+):
+    """
+    Create a new parlay bet.
+    
+    Steps:
+    1. Calculate combined odds
+    2. Create parlay parent record
+    3. Create individual leg bets (linked to parlay)
+    4. Create transaction record
+    5. Update account balance
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        # Validate
+        if len(parlay.legs) < 2:
+            raise HTTPException(400, "Parlay must have at least 2 legs")
+        if len(parlay.legs) > 15:
+            raise HTTPException(400, "Parlay cannot have more than 15 legs")
+        
+        # Calculate odds
+        combined_odds = calculate_parlay_odds(parlay.legs)
+        potential_payout = calculate_parlay_payout(parlay.stake_amount, combined_odds)
+        sport_mix = get_sport_mix(parlay.legs)
+        
+        # Create parlay parent
+        cursor.execute("""
+            INSERT INTO parlays (
+                user_id, account_id, total_legs, combined_odds_american,
+                stake_amount, potential_payout, sport_mix, notes
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING parlay_id
+        """, [
+            user_id,
+            parlay.account_id,
+            len(parlay.legs),
+            combined_odds,
+            parlay.stake_amount,
+            potential_payout,
+            sport_mix,
+            parlay.notes
+        ])
+        
+        parlay_id = cursor.fetchone()['parlay_id']
+        
+        # Create individual leg bets
+        leg_ids = []
+        for leg in parlay.legs:
+            cursor.execute("""
+                INSERT INTO bets (
+                    user_id, account_id, parlay_id, bet_type, sport,
+                    market_key, bet_side, line_value, odds_american,
+                    stake_amount, game_id, player_id, sport_id, notes, status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+                RETURNING bet_id
+            """, [
+                user_id,
+                parlay.account_id,
+                parlay_id,
+                leg.bet_type,
+                leg.sport,
+                leg.market_key,
+                leg.bet_side,
+                leg.line_value,
+                leg.odds_american,
+                0,  # Legs don't have individual stakes
+                leg.game_id,
+                leg.player_id,
+                leg.sport_id,
+                leg.notes
+            ])
+            
+            leg_ids.append(cursor.fetchone()['bet_id'])
+        
+        # Create transaction (deduct stake from account)
+        cursor.execute("""
+            INSERT INTO bankroll_transactions (
+                account_id, user_id, transaction_type, amount, description
+            )
+            VALUES (%s, %s, 'bet_placed', %s, %s)
+        """, [
+            parlay.account_id,
+            user_id,
+            -parlay.stake_amount,
+            f"Parlay bet placed: {len(parlay.legs)} legs, {sport_mix}"
+        ])
+        
+        # Update account balance
+        cursor.execute("""
+            UPDATE bankroll_accounts
+            SET current_balance = current_balance - %s,
+                updated_at = NOW()
+            WHERE account_id = %s
+        """, [parlay.stake_amount, parlay.account_id])
+        
+        conn.commit()
+        
+        # Fetch created parlay with details
+        cursor.execute("""
+            SELECT * FROM v_parlay_details
+            WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        result = cursor.fetchone()
+        cursor.close()
+        
+        return result
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        conn.rollback()
+        print(f"❌ Create Parlay Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to create parlay: {str(e)}")
+
+
+@router.get("/bankroll/parlays", response_model=List[ParlayResponse])
+async def get_parlays(
+    user_id: int = Query(default=1),
+    status: Optional[str] = Query(default=None),
+    account_id: Optional[int] = Query(default=None),
+    limit: int = Query(default=50, le=500),
+    conn = Depends(get_db)
+):
+    """Get user's parlays with filtering"""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        where_clauses = ["user_id = %s"]
+        params = [user_id]
+        
+        if status:
+            where_clauses.append("parlay_status = %s")
+            params.append(status)
+        
+        if account_id:
+            where_clauses.append("account_id = %s")
+            params.append(account_id)
+        
+        where_clause = " AND ".join(where_clauses)
+        
+        cursor.execute(f"""
+            SELECT * FROM v_parlay_details
+            WHERE {where_clause}
+            ORDER BY placed_at DESC
+            LIMIT %s
+        """, params + [limit])
+        
+        parlays = cursor.fetchall()
+        cursor.close()
+        
+        return parlays
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to fetch parlays: {str(e)}")
+
+
+@router.get("/bankroll/parlays/{parlay_id}", response_model=ParlayResponse)
+async def get_parlay(
+    parlay_id: int,
+    conn = Depends(get_db)
+):
+    """Get single parlay with all legs"""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM v_parlay_details
+            WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        parlay = cursor.fetchone()
+        cursor.close()
+        
+        if not parlay:
+            raise HTTPException(404, "Parlay not found")
+        
+        return parlay
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to fetch parlay: {str(e)}")
+
+
+@router.post("/bankroll/parlays/{parlay_id}/settle")
+async def settle_parlay(
+    parlay_id: int,
+    leg_results: dict,  # {bet_id: 'won'/'lost'/'push'}
+    conn = Depends(get_db)
+):
+    """
+    Settle a parlay by settling all legs.
+    
+    Rules:
+    - ALL legs must be 'won' for parlay to win
+    - ANY leg 'lost' = parlay lost
+    - If any leg is 'push', it's removed from parlay odds calculation
+    
+    Request Body:
+    {
+        "123": "won",
+        "124": "won", 
+        "125": "lost"
+    }
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        # Get parlay details
+        cursor.execute("""
+            SELECT p.*, ba.current_balance
+            FROM parlays p
+            JOIN bankroll_accounts ba ON p.account_id = ba.account_id
+            WHERE p.parlay_id = %s
+        """, [parlay_id])
+        
+        parlay = cursor.fetchone()
+        if not parlay:
+            raise HTTPException(404, "Parlay not found")
+        
+        if parlay['status'] != 'pending':
+            raise HTTPException(400, "Parlay already settled")
+        
+        # Update individual leg statuses
+        all_won = True
+        any_lost = False
+        push_count = 0
+        
+        for bet_id_str, result in leg_results.items():
+            bet_id = int(bet_id_str)
+            
+            if result not in ['won', 'lost', 'push']:
+                raise HTTPException(400, f"Invalid result for bet {bet_id}: {result}")
+            
+            cursor.execute("""
+                UPDATE bets
+                SET status = %s, settled_at = NOW(), updated_at = NOW()
+                WHERE bet_id = %s AND parlay_id = %s
+            """, [result, bet_id, parlay_id])
+            
+            if result == 'lost':
+                any_lost = True
+                all_won = False
+            elif result == 'push':
+                push_count += 1
+            elif result != 'won':
+                all_won = False
+        
+        # Determine parlay result
+        if any_lost:
+            parlay_status = 'lost'
+            actual_payout = 0
+            profit_loss = -parlay['stake_amount']
+        elif all_won:
+            parlay_status = 'won'
+            # If there were pushes, recalculate odds without those legs
+            if push_count > 0:
+                # Get winning legs' odds
+                cursor.execute("""
+                    SELECT odds_american FROM bets
+                    WHERE parlay_id = %s AND status = 'won'
+                """, [parlay_id])
+                
+                winning_legs_odds = [row['odds_american'] for row in cursor.fetchall()]
+                
+                # Recalculate parlay odds
+                from types import SimpleNamespace
+                legs = [SimpleNamespace(odds_american=odds) for odds in winning_legs_odds]
+                recalc_odds = calculate_parlay_odds(legs)
+                actual_payout = calculate_parlay_payout(parlay['stake_amount'], recalc_odds)
+            else:
+                actual_payout = parlay['potential_payout']
+            
+            profit_loss = actual_payout - parlay['stake_amount']
+        else:
+            # Some legs still pending
+            raise HTTPException(400, "Not all legs have been settled")
+        
+        # Update parlay
+        cursor.execute("""
+            UPDATE parlays
+            SET status = %s,
+                actual_payout = %s,
+                profit_loss = %s,
+                settled_at = NOW(),
+                updated_at = NOW()
+            WHERE parlay_id = %s
+        """, [parlay_status, actual_payout, profit_loss, parlay_id])
+        
+        # Update account balance (if won)
+        if parlay_status == 'won':
+            cursor.execute("""
+                UPDATE bankroll_accounts
+                SET current_balance = current_balance + %s,
+                    updated_at = NOW()
+                WHERE account_id = %s
+            """, [actual_payout, parlay['account_id']])
+            
+            # Create transaction
+            cursor.execute("""
+                INSERT INTO bankroll_transactions (
+                    account_id, user_id, transaction_type, amount, description
+                )
+                VALUES (%s, %s, 'bet_settled', %s, %s)
+            """, [
+                parlay['account_id'],
+                parlay['user_id'],
+                actual_payout,
+                f"Parlay won: {parlay['total_legs']} legs, +${profit_loss:.2f}"
+            ])
+        
+        conn.commit()
+        
+        # TODO: Check for alerts (winning streak, profit milestone, etc.)
+        
+        # Return updated parlay
+        cursor.execute("""
+            SELECT * FROM v_parlay_details
+            WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        result = cursor.fetchone()
+        cursor.close()
+        
+        return result
+        
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        if cursor:
+            cursor.close()
+        print(f"❌ Settle Parlay Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to settle parlay: {str(e)}")
+
+
+@router.delete("/bankroll/parlays/{parlay_id}")
+async def delete_parlay(
+    parlay_id: int,
+    conn = Depends(get_db)
+):
+    """
+    Delete a parlay (only if pending).
+    Cascades to delete all leg bets.
+    Refunds stake to account.
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        # Get parlay
+        cursor.execute("""
+            SELECT * FROM parlays WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        parlay = cursor.fetchone()
+        if not parlay:
+            raise HTTPException(404, "Parlay not found")
+        
+        if parlay['status'] != 'pending':
+            raise HTTPException(400, "Can only delete pending parlays")
+        
+        # Refund stake
+        cursor.execute("""
+            UPDATE bankroll_accounts
+            SET current_balance = current_balance + %s
+            WHERE account_id = %s
+        """, [parlay['stake_amount'], parlay['account_id']])
+        
+        # Create refund transaction
+        cursor.execute("""
+            INSERT INTO bankroll_transactions (
+                account_id, user_id, transaction_type, amount, description
+            )
+            VALUES (%s, %s, 'adjustment', %s, %s)
+        """, [
+            parlay['account_id'],
+            parlay['user_id'],
+            parlay['stake_amount'],
+            f"Parlay cancelled (refund)"
+        ])
+        
+        # Delete parlay (cascades to bets via FK)
+        cursor.execute("""
+            DELETE FROM parlays WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        conn.commit()
+        cursor.close()
+        
+        return {"message": "Parlay deleted successfully", "refunded": float(parlay['stake_amount'])}
+        
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to delete parlay: {str(e)}")
+    
+# =========================================================
+# MULTI-SPORT ANALYTICS
+# =========================================================
+
+@router.get("/bankroll/analytics/by-sport")
+async def get_analytics_by_sport(
+    user_id: int = Query(default=1),
+    days: int = Query(default=30, le=365),
+    conn = Depends(get_db)
+):
+    """
+    Performance breakdown by sport.
+    
+    Returns stats for each sport user has bet on:
+    - Total bets, win rate, ROI
+    - Total staked, profit/loss
+    - Best/worst performing sport
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                sport,
+                COUNT(*) as total_bets,
+                COUNT(*) FILTER (WHERE status = 'won') as won_bets,
+                COUNT(*) FILTER (WHERE status = 'lost') as lost_bets,
+                COUNT(*) FILTER (WHERE status = 'push') as push_bets,
+                COUNT(*) FILTER (WHERE status = 'pending') as pending_bets,
+                
+                COALESCE(SUM(stake_amount), 0) as total_staked,
+                COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as profit_loss,
+                
+                ROUND(
+                    CASE 
+                        WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                            (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                             COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                        ELSE 0
+                    END,
+                1) as win_rate,
+                
+                ROUND(
+                    CASE 
+                        WHEN SUM(stake_amount) > 0 THEN
+                            (SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')) / 
+                             SUM(stake_amount) * 100)
+                        ELSE 0
+                    END,
+                1) as roi_percentage,
+                
+                ROUND(AVG(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 2) as avg_profit_per_bet,
+                MAX(profit_loss) as best_win,
+                MIN(profit_loss) as worst_loss
+                
+            FROM bets
+            WHERE user_id = %s
+            AND placed_at >= NOW() - INTERVAL '%s days'
+            AND parlay_id IS NULL  -- Exclude parlay legs
+            GROUP BY sport
+            ORDER BY profit_loss DESC
+        """
+        
+        cursor.execute(query, [user_id, days])
+        by_sport = cursor.fetchall()
+        
+        # Calculate totals
+        total_bets = sum(s['total_bets'] for s in by_sport)
+        total_profit = sum(s['profit_loss'] for s in by_sport)
+        
+        # Find best/worst
+        best_sport = max(by_sport, key=lambda x: x['profit_loss']) if by_sport else None
+        worst_sport = min(by_sport, key=lambda x: x['profit_loss']) if by_sport else None
+        
+        cursor.close()
+        
+        return {
+            "by_sport": [
+                {
+                    "sport": row['sport'],
+                    "total_bets": row['total_bets'],
+                    "won_bets": row['won_bets'],
+                    "lost_bets": row['lost_bets'],
+                    "push_bets": row['push_bets'],
+                    "pending_bets": row['pending_bets'],
+                    "total_staked": float(row['total_staked']),
+                    "profit_loss": float(row['profit_loss']),
+                    "win_rate": float(row['win_rate']),
+                    "roi_percentage": float(row['roi_percentage']),
+                    "avg_profit_per_bet": float(row['avg_profit_per_bet']) if row['avg_profit_per_bet'] else 0,
+                    "best_win": float(row['best_win']) if row['best_win'] else 0,
+                    "worst_loss": float(row['worst_loss']) if row['worst_loss'] else 0
+                }
+                for row in by_sport
+            ],
+            "summary": {
+                "total_bets": total_bets,
+                "total_profit": float(total_profit),
+                "best_sport": {
+                    "sport": best_sport['sport'],
+                    "profit_loss": float(best_sport['profit_loss'])
+                } if best_sport else None,
+                "worst_sport": {
+                    "sport": worst_sport['sport'],
+                    "profit_loss": float(worst_sport['profit_loss'])
+                } if worst_sport else None
+            }
+        }
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        print(f"❌ By Sport Analytics Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to get sport analytics: {str(e)}")
+
+
+@router.get("/bankroll/analytics/parlay-stats")
+async def get_parlay_stats(
+    user_id: int = Query(default=1),
+    days: int = Query(default=30, le=365),
+    conn = Depends(get_db)
+):
+    """
+    Parlay-specific analytics.
+    
+    Returns:
+    - Overall parlay performance
+    - Win rate by leg count (2-leg, 3-leg, etc.)
+    - Single sport vs multi-sport performance
+    - Average odds and payouts
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        # Overall parlay stats
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_parlays,
+                COUNT(*) FILTER (WHERE status = 'won') as won_parlays,
+                COUNT(*) FILTER (WHERE status = 'lost') as lost_parlays,
+                COUNT(*) FILTER (WHERE status = 'pending') as pending_parlays,
+                
+                COALESCE(SUM(stake_amount), 0) as total_staked,
+                COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost')), 0) as profit_loss,
+                
+                ROUND(
+                    CASE 
+                        WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                            (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                             COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                        ELSE 0
+                    END,
+                1) as win_rate,
+                
+                ROUND(AVG(combined_odds_american), 0) as avg_odds,
+                ROUND(AVG(total_legs), 1) as avg_legs,
+                ROUND(AVG(potential_payout), 2) as avg_potential_payout
+                
+            FROM parlays
+            WHERE user_id = %s
+            AND placed_at >= NOW() - INTERVAL '%s days'
+        """, [user_id, days])
+        
+        overall = cursor.fetchone()
+        
+        # By leg count
+        cursor.execute("""
+            SELECT 
+                total_legs,
+                COUNT(*) as count,
+                COUNT(*) FILTER (WHERE status = 'won') as won,
+                ROUND(
+                    CASE 
+                        WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                            (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                             COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                        ELSE 0
+                    END,
+                1) as win_rate,
+                COALESCE(SUM(profit_loss), 0) as profit_loss
+            FROM parlays
+            WHERE user_id = %s
+            AND placed_at >= NOW() - INTERVAL '%s days'
+            GROUP BY total_legs
+            ORDER BY total_legs
+        """, [user_id, days])
+        
+        by_leg_count = cursor.fetchall()
+        
+        # Single sport vs multi-sport
+        cursor.execute("""
+            SELECT 
+                CASE 
+                    WHEN sport_mix LIKE '%+%' THEN 'Multi-Sport'
+                    ELSE 'Single Sport'
+                END as parlay_type,
+                COUNT(*) as count,
+                COUNT(*) FILTER (WHERE status = 'won') as won,
+                ROUND(
+                    CASE 
+                        WHEN COUNT(*) FILTER (WHERE status IN ('won', 'lost')) > 0 THEN
+                            (COUNT(*) FILTER (WHERE status = 'won')::numeric / 
+                             COUNT(*) FILTER (WHERE status IN ('won', 'lost')) * 100)
+                        ELSE 0
+                    END,
+                1) as win_rate,
+                COALESCE(SUM(profit_loss), 0) as profit_loss
+            FROM parlays
+            WHERE user_id = %s
+            AND placed_at >= NOW() - INTERVAL '%s days'
+            GROUP BY parlay_type
+        """, [user_id, days])
+        
+        by_type = cursor.fetchall()
+        
+        cursor.close()
+        
+        return {
+            "overall": {
+                "total_parlays": overall['total_parlays'],
+                "won_parlays": overall['won_parlays'],
+                "lost_parlays": overall['lost_parlays'],
+                "pending_parlays": overall['pending_parlays'],
+                "total_staked": float(overall['total_staked']),
+                "profit_loss": float(overall['profit_loss']),
+                "win_rate": float(overall['win_rate']),
+                "avg_odds": int(overall['avg_odds']) if overall['avg_odds'] else 0,
+                "avg_legs": float(overall['avg_legs']) if overall['avg_legs'] else 0,
+                "avg_potential_payout": float(overall['avg_potential_payout']) if overall['avg_potential_payout'] else 0
+            },
+            "by_leg_count": [
+                {
+                    "legs": row['total_legs'],
+                    "count": row['count'],
+                    "won": row['won'],
+                    "win_rate": float(row['win_rate']),
+                    "profit_loss": float(row['profit_loss'])
+                }
+                for row in by_leg_count
+            ],
+            "by_type": [
+                {
+                    "type": row['parlay_type'],
+                    "count": row['count'],
+                    "won": row['won'],
+                    "win_rate": float(row['win_rate']),
+                    "profit_loss": float(row['profit_loss'])
+                }
+                for row in by_type
+            ]
+        }
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        print(f"❌ Parlay Stats Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to get parlay stats: {str(e)}")
+
+
+@router.get("/bankroll/analytics/sport-trends")
+async def get_sport_trends(
+    user_id: int = Query(default=1),
+    sport: str = Query(default=None),
+    days: int = Query(default=90, le=365),
+    conn = Depends(get_db)
+):
+    """
+    Daily profit/loss trends by sport.
+    
+    Used for sport-specific trend charts.
+    """
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        where_clauses = ["user_id = %s", "parlay_id IS NULL"]
+        params = [user_id]
+        
+        if sport:
+            where_clauses.append("sport = %s")
+            params.append(sport)
+        
+        where_clause = " AND ".join(where_clauses)
+        
+        cursor.execute(f"""
+            SELECT 
+                DATE(placed_at) as date,
+                sport,
+                COUNT(*) as bets_count,
+                COALESCE(SUM(profit_loss) FILTER (WHERE status IN ('won', 'lost', 'push')), 0) as profit_loss,
+                COUNT(*) FILTER (WHERE status = 'won') as won_count
+            FROM bets
+            WHERE {where_clause}
+            AND placed_at >= NOW() - INTERVAL '%s days'
+            GROUP BY DATE(placed_at), sport
+            ORDER BY date DESC, sport
+        """, params + [days])
+        
+        trends = cursor.fetchall()
+        cursor.close()
+        
+        return [
+            {
+                "date": str(row['date']),
+                "sport": row['sport'],
+                "bets_count": row['bets_count'],
+                "profit_loss": float(row['profit_loss']),
+                "won_count": row['won_count']
+            }
+            for row in trends
+        ]
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to get sport trends: {str(e)}")
+
