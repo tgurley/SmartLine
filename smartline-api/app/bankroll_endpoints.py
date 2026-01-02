@@ -2381,22 +2381,13 @@ def create_alert(cursor, user_id, alert_type, message, conn):
 # PARLAY ENDPOINTS
 # =========================================================
 
-@router.post("/parlays", response_model=ParlayResponse)
+@router.post("/parlays")
 async def create_parlay(
     parlay: ParlayCreate,
     user_id: int = Query(default=1),
     conn = Depends(get_db)
 ):
-    """
-    Create a new parlay bet.
-    
-    Steps:
-    1. Calculate combined odds
-    2. Create parlay parent record
-    3. Create individual leg bets (linked to parlay)
-    4. Create transaction record
-    5. Update account balance
-    """
+    """Create a new parlay bet"""
     cursor = None
     try:
         cursor = conn.cursor()
@@ -2434,7 +2425,6 @@ async def create_parlay(
         parlay_id = cursor.fetchone()['parlay_id']
         
         # Create individual leg bets
-        leg_ids = []
         for leg in parlay.legs:
             cursor.execute("""
                 INSERT INTO bets (
@@ -2443,7 +2433,6 @@ async def create_parlay(
                     stake_amount, game_id, player_id, sport_id, notes, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
-                RETURNING bet_id
             """, [
                 user_id,
                 parlay.account_id,
@@ -2460,33 +2449,36 @@ async def create_parlay(
                 leg.sport_id,
                 leg.notes
             ])
-            
-            leg_ids.append(cursor.fetchone()['bet_id'])
         
-        # Create transaction (deduct stake from account)
-        cursor.execute("""
-            INSERT INTO bankroll_transactions (
-                account_id, user_id, transaction_type, amount, description
-            )
-            VALUES (%s, %s, 'bet_placed', %s, %s)
-        """, [
-            parlay.account_id,
-            user_id,
-            -parlay.stake_amount,
-            f"Parlay bet placed: {len(parlay.legs)} legs, {sport_mix}"
-        ])
-        
-        # Update account balance
+        # ⭐ FIX: Update account balance FIRST, then create transaction
         cursor.execute("""
             UPDATE bankroll_accounts
             SET current_balance = current_balance - %s,
                 updated_at = NOW()
             WHERE account_id = %s
+            RETURNING current_balance
         """, [parlay.stake_amount, parlay.account_id])
+        
+        new_balance = cursor.fetchone()['current_balance']
+        
+        # Create transaction with balance_after
+        cursor.execute("""
+            INSERT INTO bankroll_transactions (
+                account_id, user_id, transaction_type, amount, 
+                balance_after, description
+            )
+            VALUES (%s, %s, 'bet_placed', %s, %s, %s)
+        """, [
+            parlay.account_id,
+            user_id,
+            -parlay.stake_amount,
+            new_balance,
+            f"Parlay bet placed: {len(parlay.legs)} legs, {sport_mix}"
+        ])
         
         conn.commit()
         
-        # Fetch created parlay with details
+        # Fetch created parlay
         cursor.execute("""
             SELECT * FROM v_parlay_details
             WHERE parlay_id = %s
@@ -2507,102 +2499,13 @@ async def create_parlay(
         raise HTTPException(500, f"Failed to create parlay: {str(e)}")
 
 
-@router.get("/parlays", response_model=List[ParlayResponse])
-async def get_parlays(
-    user_id: int = Query(default=1),
-    status: Optional[str] = Query(default=None),
-    account_id: Optional[int] = Query(default=None),
-    limit: int = Query(default=50, le=500),
-    conn = Depends(get_db)
-):
-    """Get user's parlays with filtering"""
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        
-        where_clauses = ["user_id = %s"]
-        params = [user_id]
-        
-        if status:
-            where_clauses.append("parlay_status = %s")
-            params.append(status)
-        
-        if account_id:
-            where_clauses.append("account_id = %s")
-            params.append(account_id)
-        
-        where_clause = " AND ".join(where_clauses)
-        
-        cursor.execute(f"""
-            SELECT * FROM v_parlay_details
-            WHERE {where_clause}
-            ORDER BY placed_at DESC
-            LIMIT %s
-        """, params + [limit])
-        
-        parlays = cursor.fetchall()
-        cursor.close()
-        
-        return parlays
-        
-    except Exception as e:
-        if cursor:
-            cursor.close()
-        raise HTTPException(500, f"Failed to fetch parlays: {str(e)}")
-
-
-@router.get("/parlays/{parlay_id}", response_model=ParlayResponse)
-async def get_parlay(
-    parlay_id: int,
-    conn = Depends(get_db)
-):
-    """Get single parlay with all legs"""
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT * FROM v_parlay_details
-            WHERE parlay_id = %s
-        """, [parlay_id])
-        
-        parlay = cursor.fetchone()
-        cursor.close()
-        
-        if not parlay:
-            raise HTTPException(404, "Parlay not found")
-        
-        return parlay
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        if cursor:
-            cursor.close()
-        raise HTTPException(500, f"Failed to fetch parlay: {str(e)}")
-
-
 @router.post("/parlays/{parlay_id}/settle")
 async def settle_parlay(
     parlay_id: int,
-    leg_results: dict,  # {bet_id: 'won'/'lost'/'push'}
+    leg_results: dict,
     conn = Depends(get_db)
 ):
-    """
-    Settle a parlay by settling all legs.
-    
-    Rules:
-    - ALL legs must be 'won' for parlay to win
-    - ANY leg 'lost' = parlay lost
-    - If any leg is 'push', it's removed from parlay odds calculation
-    
-    Request Body:
-    {
-        "123": "won",
-        "124": "won", 
-        "125": "lost"
-    }
-    """
+    """Settle a parlay by settling all legs"""
     cursor = None
     try:
         cursor = conn.cursor()
@@ -2631,7 +2534,7 @@ async def settle_parlay(
             bet_id = int(bet_id_str)
             
             if result not in ['won', 'lost', 'push']:
-                raise HTTPException(400, f"Invalid result for bet {bet_id}: {result}")
+                raise HTTPException(400, f"Invalid result: {result}")
             
             cursor.execute("""
                 UPDATE bets
@@ -2654,19 +2557,17 @@ async def settle_parlay(
             profit_loss = -parlay['stake_amount']
         elif all_won:
             parlay_status = 'won'
-            # If there were pushes, recalculate odds without those legs
             if push_count > 0:
-                # Get winning legs' odds
+                # Recalculate odds without push legs
                 cursor.execute("""
                     SELECT odds_american FROM bets
                     WHERE parlay_id = %s AND status = 'won'
                 """, [parlay_id])
                 
-                winning_legs_odds = [row['odds_american'] for row in cursor.fetchall()]
+                winning_odds = [row['odds_american'] for row in cursor.fetchall()]
                 
-                # Recalculate parlay odds
                 from types import SimpleNamespace
-                legs = [SimpleNamespace(odds_american=odds) for odds in winning_legs_odds]
+                legs = [SimpleNamespace(odds_american=odds) for odds in winning_odds]
                 recalc_odds = calculate_parlay_odds(legs)
                 actual_payout = calculate_parlay_payout(parlay['stake_amount'], recalc_odds)
             else:
@@ -2674,8 +2575,7 @@ async def settle_parlay(
             
             profit_loss = actual_payout - parlay['stake_amount']
         else:
-            # Some legs still pending
-            raise HTTPException(400, "Not all legs have been settled")
+            raise HTTPException(400, "Not all legs settled")
         
         # Update parlay
         cursor.execute("""
@@ -2688,31 +2588,33 @@ async def settle_parlay(
             WHERE parlay_id = %s
         """, [parlay_status, actual_payout, profit_loss, parlay_id])
         
-        # Update account balance (if won)
+        # ⭐ FIX: Update account if won, with balance_after
         if parlay_status == 'won':
             cursor.execute("""
                 UPDATE bankroll_accounts
                 SET current_balance = current_balance + %s,
                     updated_at = NOW()
                 WHERE account_id = %s
+                RETURNING current_balance
             """, [actual_payout, parlay['account_id']])
             
-            # Create transaction
+            new_balance = cursor.fetchone()['current_balance']
+            
             cursor.execute("""
                 INSERT INTO bankroll_transactions (
-                    account_id, user_id, transaction_type, amount, description
+                    account_id, user_id, transaction_type, amount, 
+                    balance_after, description
                 )
-                VALUES (%s, %s, 'bet_settled', %s, %s)
+                VALUES (%s, %s, 'bet_settled', %s, %s, %s)
             """, [
                 parlay['account_id'],
                 parlay['user_id'],
                 actual_payout,
+                new_balance,
                 f"Parlay won: {parlay['total_legs']} legs, +${profit_loss:.2f}"
             ])
         
         conn.commit()
-        
-        # TODO: Check for alerts (winning streak, profit milestone, etc.)
         
         # Return updated parlay
         cursor.execute("""
@@ -2732,9 +2634,6 @@ async def settle_parlay(
         conn.rollback()
         if cursor:
             cursor.close()
-        print(f"❌ Settle Parlay Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(500, f"Failed to settle parlay: {str(e)}")
 
 
@@ -2743,16 +2642,11 @@ async def delete_parlay(
     parlay_id: int,
     conn = Depends(get_db)
 ):
-    """
-    Delete a parlay (only if pending).
-    Cascades to delete all leg bets.
-    Refunds stake to account.
-    """
+    """Delete a pending parlay"""
     cursor = None
     try:
         cursor = conn.cursor()
         
-        # Get parlay
         cursor.execute("""
             SELECT * FROM parlays WHERE parlay_id = %s
         """, [parlay_id])
@@ -2764,27 +2658,32 @@ async def delete_parlay(
         if parlay['status'] != 'pending':
             raise HTTPException(400, "Can only delete pending parlays")
         
-        # Refund stake
+        # ⭐ FIX: Refund stake with balance_after
         cursor.execute("""
             UPDATE bankroll_accounts
-            SET current_balance = current_balance + %s
+            SET current_balance = current_balance + %s,
+                updated_at = NOW()
             WHERE account_id = %s
+            RETURNING current_balance
         """, [parlay['stake_amount'], parlay['account_id']])
         
-        # Create refund transaction
+        new_balance = cursor.fetchone()['current_balance']
+        
         cursor.execute("""
             INSERT INTO bankroll_transactions (
-                account_id, user_id, transaction_type, amount, description
+                account_id, user_id, transaction_type, amount, 
+                balance_after, description
             )
-            VALUES (%s, %s, 'adjustment', %s, %s)
+            VALUES (%s, %s, 'adjustment', %s, %s, %s)
         """, [
             parlay['account_id'],
             parlay['user_id'],
             parlay['stake_amount'],
-            f"Parlay cancelled (refund)"
+            new_balance,
+            "Parlay cancelled (refund)"
         ])
         
-        # Delete parlay (cascades to bets via FK)
+        # Delete parlay (cascades to bets)
         cursor.execute("""
             DELETE FROM parlays WHERE parlay_id = %s
         """, [parlay_id])
@@ -2792,7 +2691,7 @@ async def delete_parlay(
         conn.commit()
         cursor.close()
         
-        return {"message": "Parlay deleted successfully", "refunded": float(parlay['stake_amount'])}
+        return {"message": "Parlay deleted", "refunded": float(parlay['stake_amount'])}
         
     except HTTPException:
         conn.rollback()
