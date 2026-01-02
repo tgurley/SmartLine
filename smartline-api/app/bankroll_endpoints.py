@@ -2381,7 +2381,7 @@ def create_alert(cursor, user_id, alert_type, message, conn):
 # PARLAY ENDPOINTS
 # =========================================================
 
-@router.post("/bankroll/parlays", response_model=ParlayResponse)
+@router.post("/parlays", response_model=ParlayResponse)
 async def create_parlay(
     parlay: ParlayCreate,
     user_id: int = Query(default=1),
@@ -2507,7 +2507,7 @@ async def create_parlay(
         raise HTTPException(500, f"Failed to create parlay: {str(e)}")
 
 
-@router.get("/bankroll/parlays", response_model=List[ParlayResponse])
+@router.get("/parlays", response_model=List[ParlayResponse])
 async def get_parlays(
     user_id: int = Query(default=1),
     status: Optional[str] = Query(default=None),
@@ -2551,7 +2551,7 @@ async def get_parlays(
         raise HTTPException(500, f"Failed to fetch parlays: {str(e)}")
 
 
-@router.get("/bankroll/parlays/{parlay_id}", response_model=ParlayResponse)
+@router.get("/parlays/{parlay_id}", response_model=ParlayResponse)
 async def get_parlay(
     parlay_id: int,
     conn = Depends(get_db)
@@ -2582,7 +2582,7 @@ async def get_parlay(
         raise HTTPException(500, f"Failed to fetch parlay: {str(e)}")
 
 
-@router.post("/bankroll/parlays/{parlay_id}/settle")
+@router.post("/parlays/{parlay_id}/settle")
 async def settle_parlay(
     parlay_id: int,
     leg_results: dict,  # {bet_id: 'won'/'lost'/'push'}
@@ -2738,7 +2738,7 @@ async def settle_parlay(
         raise HTTPException(500, f"Failed to settle parlay: {str(e)}")
 
 
-@router.delete("/bankroll/parlays/{parlay_id}")
+@router.delete("/parlays/{parlay_id}")
 async def delete_parlay(
     parlay_id: int,
     conn = Depends(get_db)
@@ -2807,7 +2807,7 @@ async def delete_parlay(
 # MULTI-SPORT ANALYTICS
 # =========================================================
 
-@router.get("/bankroll/analytics/by-sport")
+@router.get("/analytics/by-sport")
 async def get_analytics_by_sport(
     user_id: int = Query(default=1),
     days: int = Query(default=30, le=365),
@@ -2922,7 +2922,7 @@ async def get_analytics_by_sport(
         raise HTTPException(500, f"Failed to get sport analytics: {str(e)}")
 
 
-@router.get("/bankroll/analytics/parlay-stats")
+@router.get("/analytics/parlay-stats")
 async def get_parlay_stats(
     user_id: int = Query(default=1),
     days: int = Query(default=30, le=365),
@@ -3068,7 +3068,7 @@ async def get_parlay_stats(
         raise HTTPException(500, f"Failed to get parlay stats: {str(e)}")
 
 
-@router.get("/bankroll/analytics/sport-trends")
+@router.get("/analytics/sport-trends")
 async def get_sport_trends(
     user_id: int = Query(default=1),
     sport: str = Query(default=None),
