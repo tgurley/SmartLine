@@ -2498,6 +2498,78 @@ async def create_parlay(
         traceback.print_exc()
         raise HTTPException(500, f"Failed to create parlay: {str(e)}")
 
+@router.get("/bankroll/parlays")
+async def get_parlays(
+    user_id: int = Query(default=1),
+    status: Optional[str] = Query(default=None),
+    account_id: Optional[int] = Query(default=None),
+    limit: int = Query(default=50, le=500),
+    conn = Depends(get_db)
+):
+    """Get user's parlays with filtering"""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        where_clauses = ["user_id = %s"]
+        params = [user_id]
+        
+        if status:
+            where_clauses.append("parlay_status = %s")
+            params.append(status)
+        
+        if account_id:
+            where_clauses.append("account_id = %s")
+            params.append(account_id)
+        
+        where_clause = " AND ".join(where_clauses)
+        
+        cursor.execute(f"""
+            SELECT * FROM v_parlay_details
+            WHERE {where_clause}
+            ORDER BY placed_at DESC
+            LIMIT %s
+        """, params + [limit])
+        
+        parlays = cursor.fetchall()
+        cursor.close()
+        
+        return parlays
+        
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to fetch parlays: {str(e)}")
+
+
+@router.get("/bankroll/parlays/{parlay_id}")
+async def get_parlay(
+    parlay_id: int,
+    conn = Depends(get_db)
+):
+    """Get single parlay with all legs"""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM v_parlay_details WHERE parlay_id = %s
+        """, [parlay_id])
+        
+        parlay = cursor.fetchone()
+        cursor.close()
+        
+        if not parlay:
+            raise HTTPException(404, "Parlay not found")
+        
+        return parlay
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if cursor:
+            cursor.close()
+        raise HTTPException(500, f"Failed to fetch parlay: {str(e)}")
 
 @router.post("/parlays/{parlay_id}/settle")
 async def settle_parlay(
