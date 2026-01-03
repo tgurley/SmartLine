@@ -2498,7 +2498,7 @@ async def create_parlay(
         traceback.print_exc()
         raise HTTPException(500, f"Failed to create parlay: {str(e)}")
 
-@router.get("/bankroll/parlays")
+@router.get("/parlays")
 async def get_parlays(
     user_id: int = Query(default=1),
     status: Optional[str] = Query(default=None),
@@ -2542,7 +2542,7 @@ async def get_parlays(
         raise HTTPException(500, f"Failed to fetch parlays: {str(e)}")
 
 
-@router.get("/bankroll/parlays/{parlay_id}")
+@router.get("/parlays/{parlay_id}")
 async def get_parlay(
     parlay_id: int,
     conn = Depends(get_db)
