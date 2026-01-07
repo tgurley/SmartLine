@@ -591,7 +591,7 @@ async def get_bets(
             p.position as player_position
         FROM bets b
         LEFT JOIN bankroll_accounts ba ON b.account_id = ba.account_id
-        LEFT JOIN players p ON b.player_id = p.player_id
+        LEFT JOIN player p ON b.player_id = p.player_id
         WHERE b.user_id = %s
     """
     params = [user_id]
