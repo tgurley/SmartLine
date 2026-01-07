@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Calendar, TrendingUp, BarChart3 } from 'lucide-react';
+import { Home, Calendar, TrendingUp, BarChart3, BarChart2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const navItems = [

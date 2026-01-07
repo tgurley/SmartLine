@@ -12,6 +12,11 @@ import PlayerDetailPage from './pages/PlayerDetailPage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import OddsDashboard from './pages/OddsDashboard';
 import BankrollDashboard from './pages/BankrollDashboard';
+import BankrollAnalyticsPage from './pages/BankrollAnalyticsPage';
+import GoalsDashboard from './pages/GoalsDashboard';
+import BetsPage from './pages/BetsPage';
+import SettingsPage from './pages/SettingsPage';
+import ExportPage from './pages/ExportPage';
 
 // Placeholder pages - to be built later
 // const OddsPage = () => (
@@ -35,12 +40,12 @@ const StandingsPage = () => (
   </div>
 );
 
-const SettingsPage = () => (
-  <div>
-    <h1 className="text-3xl font-display font-bold text-white mb-4">Settings</h1>
-    <p className="text-slate-400">Settings page coming soon...</p>
-  </div>
-);
+// const SettingsPage = () => (
+//   <div>
+//     <h1 className="text-3xl font-display font-bold text-white mb-4">Settings</h1>
+//     <p className="text-slate-400">Settings page coming soon...</p>
+//   </div>
+// );
 
 
 function App() {
@@ -82,6 +87,10 @@ function App() {
           <Route path="standings" element={<StandingsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="bankroll" element={<BankrollDashboard />} />
+          <Route path="bankroll/bets" element={<BetsPage />} />
+          <Route path="bankroll/analytics" element={<BankrollAnalyticsPage />} />
+          <Route path="bankroll/goals" element={<GoalsDashboard />} />
+          <Route path="bankroll/export" element={<ExportPage />} />
         </Route>
         
         {/* Catch all - redirect to landing */}

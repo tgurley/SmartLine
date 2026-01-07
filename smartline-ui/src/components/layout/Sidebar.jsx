@@ -2,8 +2,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Home, 
   Calendar, 
-  TrendingUp, 
+  TrendingUp,
+  BarChart2, 
   BarChart3,
+  Target,
   Trophy,
   Settings,
   Wallet,
@@ -18,6 +20,8 @@ const navItems = [
   { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   { icon: Trophy, label: 'Standings', path: '/standings' },
   { icon: Wallet, label: 'Bankroll Manager', path: '/bankroll' },
+  { icon: BarChart2, label: 'Bankroll Analytics', path: '/bankroll/analytics' },
+  { icon: Target, label: 'Goals', path: '/bankroll/goals' },
 ];
 
 const Sidebar = ({ isOpen, onClose }) => {

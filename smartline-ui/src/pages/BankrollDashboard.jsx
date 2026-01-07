@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -9,6 +10,7 @@ import {
   Wallet,
   PieChart,
   BarChart3,
+  BarChart2,
   Calendar
 } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -18,6 +20,13 @@ import AddBetModal from '../components/bankroll/AddBetModal';
 import AddAccountModal from '../components/bankroll/AddAccountModal';
 import RecentBets from '../components/bankroll/RecentBets';
 import AccountsList from '../components/bankroll/AccountsList';
+import BankrollChart from '../components/bankroll/BankrollChart';
+import PerformanceCharts from '../components/bankroll/PerformanceCharts';
+import EditBetModal from '../components/bankroll/EditBetModal';
+import GoalProgressCard from '../components/bankroll/goals/GoalProgressCard';
+import AlertBanner from '../components/bankroll/alerts/AlertBanner';
+
+//Charts
 
 const API_BASE = 'https://smartline-production.up.railway.app';
 
@@ -28,11 +37,29 @@ const BankrollDashboard = () => {
   const [showAddBet, setShowAddBet] = useState(false);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingBet, setEditingBet] = useState(null);
+  const [goals, setGoals] = useState([]);
+  const [alerts, setAlerts] = useState([]);
 
   // Fetch overview data
   useEffect(() => {
     fetchOverview();
     fetchAccounts();
+  }, []);
+
+  // In BankrollDashboard.jsx, add test alert
+  useEffect(() => {
+    // Test alert
+    setAlerts([{
+      type: 'warning',
+      message: 'Test alert: You are approaching your daily betting limit!'
+    }]);
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/bankroll/goals?user_id=1`)
+      .then(res => res.json())
+      .then(data => setGoals(data.slice(0, 2))); // Show top 2 goals
   }, []);
 
   const fetchOverview = async () => {
@@ -62,6 +89,10 @@ const BankrollDashboard = () => {
   const handleBetAdded = () => {
     fetchOverview();
     setShowAddBet(false);
+  };
+
+  const handleEditBet = (bet) => {
+    setEditingBet(bet);
   };
 
   const handleAccountAdded = () => {
@@ -146,6 +177,16 @@ const BankrollDashboard = () => {
 
   const streakDisplay = overview?.current_streak ? getStreakDisplay(overview.current_streak) : null;
 
+  const checkAlerts = () => {
+    // Example: Check if approaching daily limit
+    if (dailySpent > dailyLimit * 0.8) {
+      setAlerts([{
+        type: 'warning',
+        message: `You've spent $${dailySpent} of your $${dailyLimit} daily limit`
+      }]);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-8">
       {/* Page Header */}
@@ -164,6 +205,12 @@ const BankrollDashboard = () => {
           </p>
         </div>
         <div className="flex gap-3">
+          <Link to="/bankroll/analytics">
+            <Button variant="outline" size="md" className="w-full">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              View Analytics
+            </Button>
+          </Link>
           <Button 
             variant="ghost"
             size="md"
@@ -190,8 +237,20 @@ const BankrollDashboard = () => {
             Log Bet
           </Button>
         </div>
-
       </div>
+
+      {/* Alerts */}
+      {alerts && alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map((alert, index) => (
+            <AlertBanner 
+              key={index} 
+              alert={alert} 
+              onDismiss={() => setAlerts(alerts.filter((_, i) => i !== index))}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -243,11 +302,23 @@ const BankrollDashboard = () => {
         })}
       </div>
 
+      {/* Goals Section */}
+      {goals && goals.length > 0 && (
+        <div className="grid md:grid-cols-2 gap-6">
+          {goals.map(goal => (
+            <GoalProgressCard key={goal.goal_id} goal={goal} />
+          ))}
+        </div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Recent Bets - Takes 2 columns */}
         <div className="lg:col-span-2">
-          <RecentBets onBetUpdated={fetchOverview} />
+          <RecentBets 
+            onBetUpdated={fetchOverview}
+            onEditBet={handleEditBet} 
+          />
         </div>
 
         {/* Accounts List - Takes 1 column */}
@@ -259,50 +330,14 @@ const BankrollDashboard = () => {
         </div>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Coming Soon - Charts */}
-        <Card variant="elevated">
-          <Card.Header>
-            <Card.Title>
-              <BarChart3 className="w-5 h-5 text-blue-400 mr-2 inline" />
-              Bankroll Chart
-            </Card.Title>
-            <Card.Description>
-              Track your balance over time
-            </Card.Description>
-          </Card.Header>
-          <Card.Content>
-            <div className="h-48 flex items-center justify-center bg-dark-900 rounded-lg border-2 border-dashed border-dark-700">
-              <div className="text-center">
-                <Calendar className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-                <p className="text-slate-500">Chart visualization coming in Phase 2</p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
 
-        {/* Coming Soon - Performance Breakdown */}
-        <Card variant="elevated">
-          <Card.Header>
-            <Card.Title>
-              <PieChart className="w-5 h-5 text-purple-400 mr-2 inline" />
-              Performance Breakdown
-            </Card.Title>
-            <Card.Description>
-              Analyze by sportsbook and market
-            </Card.Description>
-          </Card.Header>
-          <Card.Content>
-            <div className="h-48 flex items-center justify-center bg-dark-900 rounded-lg border-2 border-dashed border-dark-700">
-              <div className="text-center">
-                <PieChart className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-                <p className="text-slate-500">Analytics coming in Phase 2</p>
-              </div>
-            </div>
-          </Card.Content>
-        </Card>
-      </div>
+      {/* <div className="grid md:grid-cols-2 gap-6">
+        
+        <BankrollChart />
+
+        
+        <PerformanceCharts />
+      </div> */}
 
       {/* Modals */}
       {showAddBet && (
@@ -317,6 +352,18 @@ const BankrollDashboard = () => {
         <AddAccountModal 
           onClose={() => setShowAddAccount(false)}
           onAccountAdded={handleAccountAdded}
+        />
+      )}
+
+      {editingBet && (
+        <EditBetModal
+          bet={editingBet}
+          accounts={accounts}
+          onClose={() => setEditingBet(null)}
+          onBetUpdated={() => {
+            fetchOverview();
+            setEditingBet(null);
+          }}
         />
       )}
     </div>

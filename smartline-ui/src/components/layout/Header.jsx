@@ -10,6 +10,7 @@ import {
   Users
 } from 'lucide-react';
 import Button from '../ui/Button';
+import AlertCenter from '../bankroll/alerts/AlertCenter';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://smartline-production.up.railway.app';
 
@@ -24,6 +25,18 @@ const Header = ({ onMenuClick }) => {
   const searchRef = useRef(null);
   const mobileSearchRef = useRef(null);
   const navigate = useNavigate();
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
+  const alertButtonRef = useRef(null);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    
+    // Poll for new alerts every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -322,6 +335,16 @@ const Header = ({ onMenuClick }) => {
       </div>
     );
   };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bankroll/alerts/unread-count?user_id=1`);
+      const data = await response.json();
+      setUnreadAlertCount(data.count || 0);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
   
   return (
     <header className="sticky top-0 z-50 bg-dark-950/95 backdrop-blur-sm border-b border-dark-700">
@@ -391,13 +414,33 @@ const Header = ({ onMenuClick }) => {
             </button>
             
             {/* Notifications */}
-            <button
-              className="relative p-2 text-slate-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <div className="relative">
+              <button
+                ref={alertButtonRef}
+                onClick={() => setShowAlerts(!showAlerts)}
+                className="relative p-2 text-slate-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadAlertCount > 0 && (
+                  <>
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                      {unreadAlertCount > 9 ? '9+' : unreadAlertCount}
+                    </span>
+                  </>
+                )}
+              </button>
+              
+              <AlertCenter
+                isOpen={showAlerts}
+                onClose={() => {
+                  setShowAlerts(false);
+                  fetchUnreadCount(); // Refresh count when closing
+                }}
+                triggerRef={alertButtonRef}
+              />
+            </div>
             
             {/* User Menu */}
             <button
