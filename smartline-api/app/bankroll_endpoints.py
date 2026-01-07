@@ -587,7 +587,7 @@ async def get_bets(
         SELECT 
             b.*,
             ba.bookmaker_name,
-            p.player_name,
+            p.full_name,
             p.position as player_position
         FROM bets b
         LEFT JOIN bankroll_accounts ba ON b.account_id = ba.account_id
