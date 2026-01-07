@@ -2662,11 +2662,13 @@ async def settle_parlay(
                 from types import SimpleNamespace
                 legs = [SimpleNamespace(odds_american=odds) for odds in winning_odds]
                 recalc_odds = calculate_parlay_odds(legs)
-                actual_payout = calculate_parlay_payout(parlay['stake_amount'], recalc_odds)
+                
+                stake_float = float(parlay['stake_amount'])
+                actual_payout = calculate_parlay_payout(stake_float, recalc_odds)
             else:
                 actual_payout = parlay['potential_payout']
             
-            profit_loss = actual_payout - parlay['stake_amount']
+            profit_loss = float(actual_payout) - float(parlay['stake_amount'])
         else:
             raise HTTPException(400, "Not all legs settled")
         
