@@ -582,45 +582,56 @@ async def get_bets(
     """
     cursor = conn.cursor()
     
-    # Build query
-    query = "SELECT * FROM v_recent_bets WHERE user_id = %s"
+    # ⭐ FIX: Query from bets table with JOINs, not v_recent_bets view
+    query = """
+        SELECT 
+            b.*,
+            ba.bookmaker_name,
+            p.player_name,
+            p.position as player_position
+        FROM bets b
+        LEFT JOIN bankroll_accounts ba ON b.account_id = ba.account_id
+        LEFT JOIN players p ON b.player_id = p.player_id
+        WHERE b.user_id = %s
+    """
     params = [user_id]
     
+    # ⭐ CRITICAL: Filter parlay legs
     if parlay_id is not None:
-            if parlay_id.lower() == 'null':
-                # Exclude parlay legs - only show standalone single bets
-                query += " AND parlay_id IS NULL"
-            else:
-                # Show legs of a specific parlay
-                query += " AND parlay_id = %s"
-                params.append(int(parlay_id))
+        if parlay_id.lower() == 'null':
+            # Exclude parlay legs - only show standalone single bets
+            query += " AND b.parlay_id IS NULL"
+        else:
+            # Show legs of a specific parlay
+            query += " AND b.parlay_id = %s"
+            params.append(int(parlay_id))
     
     if status:
-        query += " AND status = %s"
+        query += " AND b.status = %s"
         params.append(status)
     
     if account_id:
-        query += " AND account_id = %s"
+        query += " AND b.account_id = %s"
         params.append(account_id)
     
     if bet_type:
-        query += " AND bet_type = %s"
+        query += " AND b.bet_type = %s"
         params.append(bet_type)
     
     if market_key:
-        query += " AND market_key = %s"
+        query += " AND b.market_key = %s"
         params.append(market_key)
     
     if player_id:
-        query += " AND player_id = %s"
+        query += " AND b.player_id = %s"
         params.append(player_id)
     
     if start_date:
-        query += " AND DATE(placed_at) >= %s"
+        query += " AND DATE(b.placed_at) >= %s"
         params.append(start_date)
     
     if end_date:
-        query += " AND DATE(placed_at) <= %s"
+        query += " AND DATE(b.placed_at) <= %s"
         params.append(end_date)
     
     # Get total count
@@ -629,7 +640,7 @@ async def get_bets(
     total = cursor.fetchone()['total']
     
     # Get paginated results
-    query += " ORDER BY placed_at DESC LIMIT %s OFFSET %s"
+    query += " ORDER BY b.placed_at DESC LIMIT %s OFFSET %s"
     params.extend([limit, (page - 1) * limit])
     
     cursor.execute(query, params)
