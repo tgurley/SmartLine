@@ -571,6 +571,7 @@ async def get_bets(
     end_date: Optional[date] = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
+    parlay_id: Optional[str] = Query(default=None),
     conn = Depends(get_db)
 ):
     """
@@ -584,6 +585,15 @@ async def get_bets(
     # Build query
     query = "SELECT * FROM v_recent_bets WHERE user_id = %s"
     params = [user_id]
+    
+    if parlay_id is not None:
+            if parlay_id.lower() == 'null':
+                # Exclude parlay legs - only show standalone single bets
+                query += " AND parlay_id IS NULL"
+            else:
+                # Show legs of a specific parlay
+                query += " AND parlay_id = %s"
+                params.append(int(parlay_id))
     
     if status:
         query += " AND status = %s"
